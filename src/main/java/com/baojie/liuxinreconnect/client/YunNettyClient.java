@@ -25,7 +25,7 @@ import java.util.concurrent.locks.StampedLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.baojie.liuxinreconnect.client.buildhouse.NettyClientBuilder;
+import com.baojie.liuxinreconnect.client.buildhouse.YunBuilder;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
 import com.baojie.liuxinreconnect.client.initializer.YunClientChannelInitializer;
 import com.baojie.liuxinreconnect.client.sendrunner.MessageSendRunner;
@@ -36,7 +36,7 @@ import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.CheckNull;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
 import com.baojie.liuxinreconnect.util.StampedLockHandler;
-import com.baojie.liuxinreconnect.util.future.ObjectRecycleFuture;
+import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
 import com.baojie.liuxinreconnect.util.threadall.pool.YunThreadPoolExecutor;
 import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupCanNotUseException;
@@ -45,9 +45,9 @@ import com.baojie.liuxinreconnect.yunexception.thread.ThreadInterruptException;
 
 public class YunNettyClient {
 
-	private final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap = new ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>>(
+	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap = new ConcurrentHashMap<String, RecycleFuture<MessageResponse>>(
 			8192);
-	private final ConcurrentLinkedQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueue = new ConcurrentLinkedQueue<>();
+	private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> messageFutureQueue = new ConcurrentLinkedQueue<>();
 	private final YunThreadPoolExecutor sendThreadPool = new YunThreadPoolExecutor(256, 1024, 180, TimeUnit.SECONDS,
 			new SynchronousQueue<>(), YunThreadFactory.create("SendMessageRunner"));
 	
@@ -131,8 +131,8 @@ public class YunNettyClient {
 	}
 
 	private boolean doConnectWork(final int threadNum) {
-			bootstrap = NettyClientBuilder.build(bootstrap);
-			eventLoopGroup=NettyClientBuilder.build(eventLoopGroup, threadNum);
+			bootstrap = YunBuilder.build(bootstrap);
+			eventLoopGroup=YunBuilder.build(eventLoopGroup, threadNum);
 			if (connectionWatchdogIsNull()) {
 				connectionWatchdog = makeDog();
 			} else {
@@ -251,14 +251,14 @@ public class YunNettyClient {
 				final byte[] bytesToSend = SerializationUtil.serialize(messageRequest);
 				final String messageid = messageRequest.getMsgId();
 				CheckNull.checkStringEmpty(messageid);
-				final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture();
+				final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture();
 				messageFutureMap.putIfAbsent(messageid, unitedCloudFutureReturnObject);
 				return realSend(bytesToSend, messageid, unitedCloudFutureReturnObject, timeOut, timeUnit);
 		
 	}
 
 	private MessageResponse realSend(final byte[] bytesToSend, final String messageid,
-			final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject, final int timeOut,
+			final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject, final int timeOut,
 			final TimeUnit timeUnit) throws Exception {
 		MessageResponse messageResponse = null;
 		final Channel channel = yunChannelGroup.getOneChannel(random.nextInt(howManyChannel));
@@ -274,17 +274,17 @@ public class YunNettyClient {
 	}
 
 	@SuppressWarnings({ "unchecked" })
-	private ObjectRecycleFuture<MessageResponse> makeFuture() {
-		ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue();
+	private RecycleFuture<MessageResponse> makeFuture() {
+		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue();
 		if (null == unitedCloudFutureReturnObject) {
-			unitedCloudFutureReturnObject = ObjectRecycleFuture
+			unitedCloudFutureReturnObject = RecycleFuture
 					.createUnitedCloudFuture(MessageResponse.class);
 		}
 		return unitedCloudFutureReturnObject;
 	}
 
-	private ObjectRecycleFuture<MessageResponse> getFutureFromQueue() {
-		ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = null;
+	private RecycleFuture<MessageResponse> getFutureFromQueue() {
+		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = null;
 		try {
 			unitedCloudFutureReturnObject = messageFutureQueue.poll();
 		} catch (Throwable throwable) {
@@ -294,7 +294,7 @@ public class YunNettyClient {
 	}
 
 	private void handleFutureMapQueue(final String messageid,
-			final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+			final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
 		removeFurureFromMap(messageid);
 		resetFuture(unitedCloudFutureReturnObject);
 		putFutureIntoQueue(unitedCloudFutureReturnObject);
@@ -308,12 +308,12 @@ public class YunNettyClient {
 		}
 	}
 
-	private void resetFuture(final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+	private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
 		unitedCloudFutureReturnObject.resetAsNew();
 	}
 
 	private boolean putFutureIntoQueue(
-			final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+			final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
 		return messageFutureQueue.offer(unitedCloudFutureReturnObject);
 	}
 
@@ -416,7 +416,7 @@ public class YunNettyClient {
 		return yunChannelGroup;
 	}
 
-	public ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> getMessageFutureMap() {
+	public ConcurrentHashMap<String, RecycleFuture<MessageResponse>> getMessageFutureMap() {
 		return messageFutureMap;
 	}
 

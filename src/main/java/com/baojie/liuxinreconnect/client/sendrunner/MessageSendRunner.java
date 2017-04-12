@@ -14,15 +14,15 @@ import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
 import com.baojie.liuxinreconnect.message.MessageRequest;
 import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
-import com.baojie.liuxinreconnect.util.future.ObjectRecycleFuture;
+import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 
 import io.netty.channel.Channel;
 
 public class MessageSendRunner implements Runnable {
 	private static final Logger log = LoggerFactory.getLogger(MessageSendRunner.class);
-	private final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap;
+	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap;
 	// 仅仅给一个线程提供缓存，容量应该小一点
-	private final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueue = new LinkedBlockingQueue<>(
+	private final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueue = new LinkedBlockingQueue<>(
 			32);
 	private final AtomicInteger messageID = new AtomicInteger(0);
 	private final YunChannelGroup yunChannelGroup;
@@ -31,7 +31,7 @@ public class MessageSendRunner implements Runnable {
 	private final int channelNum;
 
 	private MessageSendRunner(
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap,
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
 			final YunChannelGroup yunChannelGroup, final int channelNum) {
 		this.messageFutureMap = messageFutureMap;
 		this.yunChannelGroup = yunChannelGroup;
@@ -39,7 +39,7 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	public static MessageSendRunner create(
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap,
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
 			final YunChannelGroup yunChannelGroup, final int channelNum) {
 		return new MessageSendRunner(messageFutureMap, yunChannelGroup, channelNum);
 	}
@@ -49,8 +49,8 @@ public class MessageSendRunner implements Runnable {
 		final String threadName = Thread.currentThread().getName();
 		// 因为是一个循环操作，所以为了避免多次获取类的成员变量的操作码，将其构造成局部变量
 		final YunChannelGroup yunChannelGroupInner = yunChannelGroup;
-		final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMapInner = messageFutureMap;
-		final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueueInner = messageFutureQueue;
+		final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMapInner = messageFutureMap;
+		final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner = messageFutureQueue;
 		MessageRequest messageRequest = null;
 		MessageResponse messageResponse = null;
 		channel = getChannelFromGroup(yunChannelGroupInner);
@@ -73,7 +73,7 @@ public class MessageSendRunner implements Runnable {
 				messageRequest = buildMessageRequest(threadName, messageid);
 				final byte[] bytesToSend = SerializationUtil.serialize(messageRequest);
 				//final byte[] base64=StringToBytes.protoBytesToBase64Bytes(bytesToSend);
-				final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture(
+				final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture(
 						messageFutureQueueInner);
 				messageFutureMapInner.putIfAbsent(messageid, unitedCloudFutureReturnObject);
 				channel.writeAndFlush(bytesToSend, channel.voidPromise());
@@ -132,20 +132,20 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	@SuppressWarnings("unchecked")
-	private ObjectRecycleFuture<MessageResponse> makeFuture(
-			final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueueInner) {
-		ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue(
+	private RecycleFuture<MessageResponse> makeFuture(
+			final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner) {
+		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue(
 				messageFutureQueueInner);
 		if (null == unitedCloudFutureReturnObject) {
-			unitedCloudFutureReturnObject = ObjectRecycleFuture
+			unitedCloudFutureReturnObject = RecycleFuture
 					.createUnitedCloudFuture(MessageResponse.class);
 		}
 		return unitedCloudFutureReturnObject;
 	}
 
-	private ObjectRecycleFuture<MessageResponse> getFutureFromQueue(
-			final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueueInner) {
-		ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject = null;
+	private RecycleFuture<MessageResponse> getFutureFromQueue(
+			final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner) {
+		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = null;
 		try {
 			unitedCloudFutureReturnObject = messageFutureQueueInner.poll();
 		} catch (Throwable throwable) {
@@ -155,27 +155,27 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	private void handleFutureMapQueue(
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMapInner,
-			final String messageid, final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject,
-			final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueueInner) {
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMapInner,
+			final String messageid, final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject,
+			final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner) {
 		removeFurureFromMap(messageFutureMapInner, messageid);
 		resetFuture(unitedCloudFutureReturnObject);
 		putFutureIntoQueue(messageFutureQueueInner, unitedCloudFutureReturnObject);
 	}
 
 	private void removeFurureFromMap(
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMapInner,
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMapInner,
 			final String messageid) {
 		messageFutureMapInner.remove(messageid);
 	}
 
-	private void resetFuture(final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+	private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
 		unitedCloudFutureReturnObject.resetAsNew();
 	}
 
 	private boolean putFutureIntoQueue(
-			final LinkedBlockingQueue<ObjectRecycleFuture<MessageResponse>> messageFutureQueueInner,
-			final ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+			final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner,
+			final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
 		return messageFutureQueueInner.offer(unitedCloudFutureReturnObject);
 	}
 

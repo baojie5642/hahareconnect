@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.baojie.liuxinreconnect.client.handler.NettyMessageSendHandler;
 import com.baojie.liuxinreconnect.client.watchdog.ReConnectHandler;
 import com.baojie.liuxinreconnect.message.MessageResponse;
-import com.baojie.liuxinreconnect.util.future.ObjectRecycleFuture;
+import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
@@ -16,16 +16,16 @@ import io.netty.handler.codec.bytes.ByteArrayEncoder;
 
 public class YunClientChannelInitializer extends ChannelInitializer<SocketChannel> {
 
-	private final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap;
+	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap;
 	private final ReConnectHandler reConnectHandler;
 
 	public static YunClientChannelInitializer cerate(final ReConnectHandler connectionWatchdog,
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap) {
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap) {
 		return new YunClientChannelInitializer(connectionWatchdog, messageFutureMap);
 	}
 
 	private YunClientChannelInitializer(final ReConnectHandler reConnectHandler,
-			final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap) {
+			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap) {
 		this.reConnectHandler = reConnectHandler;
 		this.messageFutureMap = messageFutureMap;
 	}

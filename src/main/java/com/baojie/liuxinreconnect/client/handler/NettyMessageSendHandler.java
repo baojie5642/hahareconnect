@@ -9,19 +9,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
-import com.baojie.liuxinreconnect.util.future.ObjectRecycleFuture;
+import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 
 public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]> {
 	
-	private final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap;
+	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap;
 	
 	private static final Logger log = LoggerFactory.getLogger(NettyMessageSendHandler.class);
 
-	private NettyMessageSendHandler(final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap){
+	private NettyMessageSendHandler(final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap){
 		this.messageFutureMap=messageFutureMap;
 	}
 	
-	public static NettyMessageSendHandler create(final ConcurrentHashMap<String, ObjectRecycleFuture<MessageResponse>> messageFutureMap){
+	public static NettyMessageSendHandler create(final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap){
 		return new NettyMessageSendHandler(messageFutureMap);
 	}
 	
@@ -53,7 +53,7 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
         		return;
         	}
         	String msgId=messageResponse.getMsgId();
-        	ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject=getFutureFromMap(msgId);
+        	RecycleFuture<MessageResponse> unitedCloudFutureReturnObject=getFutureFromMap(msgId);
         	if(null!=unitedCloudFutureReturnObject){
         		unitedCloudFutureReturnObject.set(messageResponse);
         	}else {
@@ -65,8 +65,8 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
 		}
     }
     
-    private ObjectRecycleFuture<MessageResponse> getFutureFromMap(final String msgId){
-    	ObjectRecycleFuture<MessageResponse> unitedCloudFutureReturnObject=null;
+    private RecycleFuture<MessageResponse> getFutureFromMap(final String msgId){
+    	RecycleFuture<MessageResponse> unitedCloudFutureReturnObject=null;
     	try{
     		unitedCloudFutureReturnObject=messageFutureMap.get(msgId);
     	}catch (Throwable throwable) {

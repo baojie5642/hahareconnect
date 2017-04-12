@@ -7,7 +7,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import com.baojie.liuxinreconnect.util.unsafe.HahaUnsafe;
 
-public class ObjectRecycleFuture<T> {
+public class RecycleFuture<T> {
 
 	private volatile int state;
 	private static final int New = 0;
@@ -17,16 +17,16 @@ public class ObjectRecycleFuture<T> {
 	private volatile Object outcome;
 	private volatile WaitNode waiters;
 
-	private ObjectRecycleFuture(final Class<T> whichTypeMayReturn) {
+	private RecycleFuture(final Class<T> whichTypeMayReturn) {
 		this.state = New;
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public static <T> ObjectRecycleFuture createUnitedCloudFuture(final Class<T> typeReturn) {
+	public static <T> RecycleFuture createUnitedCloudFuture(final Class<T> typeReturn) {
 		if (null == typeReturn) {
 			throw new NullPointerException("'typeReturn' must not be null.");
 		}
-		return new ObjectRecycleFuture(typeReturn);
+		return new RecycleFuture(typeReturn);
 	}
 
 	public boolean isDone() {
@@ -222,7 +222,7 @@ public class ObjectRecycleFuture<T> {
 	static {
 		try {
 			UnSafe = HahaUnsafe.getUnsafe();
-			Class<?> k = ObjectRecycleFuture.class;
+			Class<?> k = RecycleFuture.class;
 			stateOffset = UnSafe.objectFieldOffset(k.getDeclaredField("state"));
 			waitersOffset = UnSafe.objectFieldOffset(k.getDeclaredField("waiters"));
 		} catch (Exception e) {
