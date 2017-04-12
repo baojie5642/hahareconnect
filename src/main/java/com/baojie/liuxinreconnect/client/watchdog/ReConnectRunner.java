@@ -1,6 +1,7 @@
 package com.baojie.liuxinreconnect.client.watchdog;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -43,7 +44,7 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private boolean canReturn(final YunScheduledThreadPool scheduledThreadPoolExecutor) {
-		final boolean scheduledShutDown = scheduledThreadExecutorShutDown(scheduledThreadPoolExecutor);
+		final boolean scheduledShutDown = poolShutDown(scheduledThreadPoolExecutor);
 		final boolean channelHasActive = isChannelsHasCreated();
 		if (scheduledShutDown || channelHasActive) {
 			return true;
@@ -52,10 +53,10 @@ public class ReConnectRunner implements Runnable {
 		}
 	}
 
-	private boolean scheduledThreadExecutorShutDown(final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+	private boolean poolShutDown(final YunScheduledThreadPool scheduledThreadPoolExecutor) {
 		boolean scheduledShutDown = false;
 		if (scheduledThreadPoolExecutor.isShutdown()) {
-			log.error("定时重连线程池被异常终结，请检查……！！！");
+			log.error("reconnect scheduledpool has shoutdown unexpect");
 			stopAllScheduledTask();
 			scheduledShutDown = true;
 		} else {
@@ -69,7 +70,7 @@ public class ReConnectRunner implements Runnable {
 		final String threadName = Thread.currentThread().getName();
 			if (yunChannelGroup.getState()) {
 				stopAllScheduledTask();
-				log.info("线程 " + threadName + ",执行重连时发现channels已经被其他线程重建，销毁本次定时任务。已经销毁其他全部定时任务。");
+				log.info("thread:" + threadName + " found channels has been build by other thread, stop and cancel");
 				channelsHasActive = true;
 			} else {
 				channelsHasActive = false;
@@ -80,7 +81,7 @@ public class ReConnectRunner implements Runnable {
 
 	private void stopAllScheduledTask() {
 		cancleRunners();
-		cleanWorkQueueInScheduledThreadPoolExecutor();
+		cleanWorkQueue();
 	}
 
 	private void cancleRunners() {
@@ -94,7 +95,7 @@ public class ReConnectRunner implements Runnable {
 		}
 	}
 
-	private void cleanWorkQueueInScheduledThreadPoolExecutor() {
+	private void cleanWorkQueue() {
 		final YunScheduledThreadPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
 		scheduledThreadPoolExecutor.purge();
 		scheduledThreadPoolExecutor.remove(this);
@@ -181,16 +182,14 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private void setChannelsGroupGood(){
-		final boolean setChannelsGoodSuccess = yunChannelGroup.setActive();
-		if(setChannelsGoodSuccess){
+		yunChannelGroup.setActive();
+		
 			log.info("当前线程是真正的重建channels的线程，channels已经全部被初始化好了，设置channelsgroup的状态已经成功，马上会释放写锁。");
-		}else {
-			log.error("当前线程是真正的重建channels的线程，channels已经全部被初始化好了，但是设置channelsgroup的状态却失败了，马上会释放写锁，请检查问题……！");
-		}	
+			
 	}
 	
 	private void cancleChannelsAndCleanGroup(final YunChannelGroup yunChannelGroup) {
-		ArrayList<Channel> channelsList = yunChannelGroup.getChannels();
+		List<Channel> channelsList = yunChannelGroup.getChannels();
 		int length = channelsList.size();
 		Channel channel = null;
 		for (int i = 0; i < length; i++) {
