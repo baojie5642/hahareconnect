@@ -1,7 +1,11 @@
-/target/
 target/
+/target/
 logs/
 /logs/
+.classpath
+.project
+.settings
+.settings/
 *.classpath
 *.settings/
 *.project
@@ -10,9 +14,7 @@ logs/
 *.war
 *.ear
 # Eclipse project files
-.classpath
-.project
-.settings/
+
 # Built application files
 *.apk
 *.ap_
@@ -34,8 +36,6 @@ proguard/
 
 # Log Files
 *.log
-
-
 
 # Intellij project files
 *.iml
