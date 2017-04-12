@@ -170,7 +170,7 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
-		unitedCloudFutureReturnObject.resetAsNew();
+		unitedCloudFutureReturnObject.reset();
 	}
 
 	private boolean putFutureIntoQueue(

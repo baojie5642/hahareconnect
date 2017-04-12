@@ -24,7 +24,7 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 			YunThreadFactory.create("ReconnectRunner"));
 	private final LinkedBlockingQueue<Future<?>> futureQueue = new LinkedBlockingQueue<>(1);
 	private final Logger log = LoggerFactory.getLogger(ReConnectHandler.class);
-	private final AtomicBoolean reconnect = new AtomicBoolean(true);
+	private final AtomicBoolean reconnect = new AtomicBoolean(false);
 	private final YunChannelGroup yunChannelGroup;
 	private final HostAndPort hostAndPort;
 	private final Bootstrap bootstrap;

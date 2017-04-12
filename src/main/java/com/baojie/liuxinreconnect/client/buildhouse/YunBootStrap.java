@@ -14,6 +14,8 @@ import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
@@ -23,22 +25,15 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 
 public class YunBootStrap {
-
-	private static final int MICRO_SECOND = 3;
-
-	private volatile Bootstrap bootstrap;
-
-	private volatile EventLoopGroup eventLoopGroup;
-
-	private final HostAndPort hostAndPort;
-
-	private final int workThread;
-
-	private final AtomicBoolean hasInit = new AtomicBoolean(false);
-
-	private final AtomicBoolean hasDestory = new AtomicBoolean(false);
-
+	
 	private final AtomicReference<ReConnectHandler> watchHandlerCache = new AtomicReference<ReConnectHandler>(null);
+	private final AtomicBoolean hasDestory = new AtomicBoolean(false);
+	private final AtomicBoolean hasInit = new AtomicBoolean(false);
+	private volatile EventLoopGroup eventLoopGroup;
+	private static final int MICRO_SECOND = 3;
+	private final HostAndPort hostAndPort;
+	private volatile Bootstrap bootstrap;
+	private final int workThread;
 
 	private YunBootStrap(final HostAndPort hostAndPort, final int workThread) {
 		this.hostAndPort = hostAndPort;
@@ -143,6 +138,34 @@ public class YunBootStrap {
 	private void optionBoot() {
 		bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
 		bootstrap.option(ChannelOption.TCP_NODELAY, true);
+	}
+
+	public Channel getOneChannel() {
+		return realGet();
+	}
+
+	private Channel realGet() {
+		final ChannelFuture channelFuture = getChannelFuture();
+		return getChannel(channelFuture);
+	}
+
+	private ChannelFuture getChannelFuture() {
+		final ChannelFuture channelFuture = bootstrap.connect(hostAndPort.getHost(), hostAndPort.getPort());
+		try {
+			channelFuture.awaitUninterruptibly();
+		} catch (Throwable throwable) {
+			throwable.printStackTrace();
+		}
+		return channelFuture;
+	}
+
+	private Channel getChannel(final ChannelFuture channelFuture) {
+		final Channel channel = channelFuture.channel();
+		if (null == channel) {
+			throw new NullPointerException();
+		} else {
+			return channel;
+		}
 	}
 
 	public void destory() {

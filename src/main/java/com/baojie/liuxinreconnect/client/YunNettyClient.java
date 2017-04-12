@@ -2,32 +2,24 @@ package com.baojie.liuxinreconnect.client;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 
-import java.util.ArrayList;
+import io.netty.channel.EventLoopGroup;
+
+
+
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
+
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.StampedLock;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.baojie.liuxinreconnect.client.buildhouse.YunBuilder;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
-import com.baojie.liuxinreconnect.client.initializer.YunClientChannelInitializer;
 import com.baojie.liuxinreconnect.client.sendrunner.MessageSendRunner;
 import com.baojie.liuxinreconnect.client.watchdog.ReConnectHandler;
 import com.baojie.liuxinreconnect.client.watchdog.HostAndPort;
@@ -35,13 +27,10 @@ import com.baojie.liuxinreconnect.message.MessageRequest;
 import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.CheckNull;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
-import com.baojie.liuxinreconnect.util.StampedLockHandler;
 import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
 import com.baojie.liuxinreconnect.util.threadall.pool.YunThreadPoolExecutor;
 import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupCanNotUseException;
-import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupLockHasHolded;
-import com.baojie.liuxinreconnect.yunexception.thread.ThreadInterruptException;
 
 public class YunNettyClient {
 
@@ -57,7 +46,7 @@ public class YunNettyClient {
 	
 	private final AtomicBoolean hasConnect = new AtomicBoolean(false);
 	
-	private final AtomicBoolean hasClosed = new AtomicBoolean(true);
+	private final AtomicBoolean hasClosed = new AtomicBoolean(false);
 	
 	private final ThreadLocalRandom random = ThreadLocalRandom.current();
 	
@@ -88,23 +77,11 @@ public class YunNettyClient {
 		return new YunNettyClient(hostAndPort);
 	}
 
-	public boolean connect() {
-		return connect(DEFULT_THREAD_NUM);
+	public void connect() {
+		
 	}
 	
-	public boolean connect(final int threadNum) {
-		final boolean right=checkThreadNum(threadNum);
-		if (isClientHasConnect()) {
-			log.info("client has connected");
-			return true;
-		} else {
-			if(right){
-				return doConnectWork(threadNum);
-			}else {
-				return doConnectWork(DEFULT_THREAD_NUM);
-			}
-		}
-	}
+	
 
 	private boolean checkThreadNum(final int threadNum){
 		if(threadNum<0){
@@ -130,102 +107,23 @@ public class YunNettyClient {
 		}
 	}
 
-	private boolean doConnectWork(final int threadNum) {
-			bootstrap = YunBuilder.build(bootstrap);
-			eventLoopGroup=YunBuilder.build(eventLoopGroup, threadNum);
-			if (connectionWatchdogIsNull()) {
-				connectionWatchdog = makeDog();
-			} else {
-				log.error("初次进行client链接时发现connectionWatchdog不为null，可能出现了其他异常，方法直接返回，请检查代码位置！！！");
-				return false;
-			}
-
-			initBootstrapAndEventLoopGroup();
-
-			return buildChannels();
-		
-	}
+	
 
 	
 
-	private boolean connectionWatchdogIsNull() {
-		if (null == connectionWatchdog) {
-			return true;
-		} else {
-			return false;
-		}
-	}
+	
 
-	private ReConnectHandler makeDog() {
-		final ReConnectHandler watchdog = new ReConnectHandler(bootstrap, hostAndPort, 
-				yunChannelGroup);
-		return watchdog;
-	}
+	
 
-	private void initBootstrapAndEventLoopGroup() {
-		bootstrap.group(eventLoopGroup);
-		initBootstrap(bootstrap, connectionWatchdog);
-	}
+	
 
-	private void initBootstrap(final Bootstrap bootstrap, final ReConnectHandler watchdog) {
-		bootstrap.channel(NioSocketChannel.class).handler(new LoggingHandler(LogLevel.INFO));
-		bootstrap.handler(YunClientChannelInitializer.cerate(watchdog, messageFutureMap));
-		bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
-		bootstrap.option(ChannelOption.TCP_NODELAY, true);
-	}
+	
 
-	private boolean buildChannels() {
-		if (null == bootstrap) {
-			log.error("已经开始初始化channel了，但是却发现bootStrap为null，出现了严重异常，请检查！已经调用清理资源方法。");
-			return false;
-		}
-		return realBuildChannels(bootstrap, yunChannelGroup);
-	}
+	
 
-	private boolean realBuildChannels(final Bootstrap bootstrap, final YunChannelGroup yunChannelGroupInner) {
-		ChannelFuture channelFuture = null;
-		for (int i = 0; i < howManyChannel; i++) {
-			channelFuture = getChannelFuture(bootstrap);
-			if (channelFuture.isDone() && channelFuture.isSuccess()) {
-				addChannelIntoMap(channelFuture, yunChannelGroupInner);
-			} else {
-				log.error("HeartBeatsClient channels中的其中一条 channel 连接失败。启动流程直接退出。");
-				cleanResourceWhenChannelBroken();
-				return false;
-			}
-		}
-		if (!yunChannelGroupInner.setActive()) {
-			log.error("初始完成channelgroup后，标记其状态为可用居然出错，此处的标记应为成功才是正确的流程，请检查异常！");
-			return false;
-		}else {
-			connectionWatchdog.turnOnReconnect();
-		}
-		return true;
-	}
+	
 
-	private ChannelFuture getChannelFuture(final Bootstrap bootstrap) {
-		ChannelFuture channelFuture = bootstrap.connect(hostAndPort.getHost(), hostAndPort.getPort());
-		if (null == channelFuture) {
-			throw new NullPointerException();
-		}
-		try {
-			channelFuture.awaitUninterruptibly();
-		} catch (Throwable throwable) {
-			throwable.printStackTrace();
-			log.error("等待channelFuture返回时出错，请检查！");
-		}
-		return channelFuture;
-	}
-
-	private void addChannelIntoMap(final ChannelFuture channelFuture, final YunChannelGroup yunChannelGroupInner) {
-		Channel channelInner = channelFuture.channel();
-		if (null == channelInner) {
-			throw new NullPointerException();
-		} else {
-			yunChannelGroupInner.addOneChannel(channelInner);
-			log.debug("HeartBeatsClient channels中的其中一条 channel 连接成功。channelID是：" + channelInner.id() + "。");
-		}
-	}
+	
 
 	public void turnOffWatchDog() {
 		if (null != connectionWatchdog) {
@@ -309,7 +207,7 @@ public class YunNettyClient {
 	}
 
 	private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
-		unitedCloudFutureReturnObject.resetAsNew();
+		unitedCloudFutureReturnObject.reset();
 	}
 
 	private boolean putFutureIntoQueue(
@@ -345,22 +243,18 @@ public class YunNettyClient {
 
 	public boolean closeClient() {
 		boolean closeSuccess = false;
-		final long stamp=StampedLockHandler.getWriteLock(stampedLock);
-		if(0L==stamp){
-			throw new ChannelGroupLockHasHolded();
-		}else if (1L==stamp) {
-			throw new ThreadInterruptException();
-		}else {
-			if (clientHasClosed.get()) {
+		
+		
+			if (hasClosed.get()) {
 				log.info("nettyclient已经关闭。");
 				closeSuccess = false;
 			} else {
-				if (clientHasClosed.compareAndSet(false, true)) {
+				if (hasClosed.compareAndSet(false, true)) {
 					setCloseState();
 					closeChannel();
 					yunChannelGroup.clean();
 					shutNettyClient();
-					clientHasConnect.set(false);
+					hasClosed.set(false);
 					log.info("nettyclient客户端已经关闭。");
 					closeSuccess = true;
 				} else {
@@ -368,7 +262,7 @@ public class YunNettyClient {
 					closeSuccess = false;
 				}
 			}
-		}
+		
 		return closeSuccess;
 	}
 
@@ -379,7 +273,7 @@ public class YunNettyClient {
 	}
 
 	private void closeChannel() {
-		final ArrayList<Channel> channels = yunChannelGroup.getChannels();
+		final List<Channel> channels = yunChannelGroup.getChannels();
 		final int size = channels.size();
 		Channel channel = null;
 		for (int i = 0; i < size; i++) {
@@ -398,10 +292,6 @@ public class YunNettyClient {
 		if (null != bootstrap) {
 			bootstrap = null;
 		}
-	}
-
-	private void cleanResourceWhenChannelBroken() {
-
 	}
 
 	public void startSend() {
