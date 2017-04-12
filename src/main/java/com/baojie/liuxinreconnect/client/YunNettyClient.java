@@ -25,7 +25,7 @@ import java.util.concurrent.locks.StampedLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.baojie.liuxinreconnect.client.BuildHouse.NettyClientBuilder;
+import com.baojie.liuxinreconnect.client.buildhouse.NettyClientBuilder;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
 import com.baojie.liuxinreconnect.client.initializer.YunClientChannelInitializer;
 import com.baojie.liuxinreconnect.client.sendrunner.MessageSendRunner;
@@ -52,7 +52,6 @@ public class YunNettyClient {
 			new SynchronousQueue<>(), YunThreadFactory.create("SendMessageRunner"));
 	
 	private static final int DEFULT_THREAD_NUM=Runtime.getRuntime().availableProcessors()*2;
-	
 	
 	private static final Logger log = LoggerFactory.getLogger(YunNettyClient.class);
 	

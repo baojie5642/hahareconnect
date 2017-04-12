@@ -1,4 +1,4 @@
-package com.baojie.liuxinreconnect.client.BuildHouse;
+package com.baojie.liuxinreconnect.client.buildhouse;
 
 import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
 
