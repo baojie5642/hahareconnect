@@ -38,7 +38,7 @@ public class YunChannelGroup {
 
 	public void addOneChannel(final Channel channel) {
 		if (null == channel) {
-			log.warn("'channel' must not be null");
+			log.warn("'channel' must not be null, can not add a null one into channelGroup");
 		} else {
 			add(channel);
 		}

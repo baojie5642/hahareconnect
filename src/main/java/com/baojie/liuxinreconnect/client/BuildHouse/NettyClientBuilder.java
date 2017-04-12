@@ -35,7 +35,6 @@ public class NettyClientBuilder {
 		}
 	}
 	
-	
 	public static EventLoopGroup buildEventLoopGroup(final int threadNum) {
 		EventLoopGroup eventLoopGroup=null;
 		if(Epoll.isAvailable()){

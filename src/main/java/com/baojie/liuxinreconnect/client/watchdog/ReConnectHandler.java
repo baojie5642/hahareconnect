@@ -20,59 +20,66 @@ import com.baojie.liuxinreconnect.util.threadall.pool.YunScheduledThreadPool;
 @Sharable
 public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 
-	
-	private final YunScheduledThreadPool Reconnect_ThreadPoolExecutor = new YunScheduledThreadPool(2,
+	private final YunScheduledThreadPool reconnectPool = new YunScheduledThreadPool(1,
 			YunThreadFactory.create("ReconnectRunner"));
-	
-	private final LinkedBlockingQueue<Future<?>> Futures_ForReconnect = new LinkedBlockingQueue<>(2);
+	private final LinkedBlockingQueue<Future<?>> futureQueue = new LinkedBlockingQueue<>(1);
 	private final Logger log = LoggerFactory.getLogger(ReConnectHandler.class);
-	
-	private final AtomicBoolean buttonForReconnect = new AtomicBoolean(true);
-
+	private final AtomicBoolean reconnect = new AtomicBoolean(true);
 	private final YunChannelGroup yunChannelGroup;
 	private final HostAndPort hostAndPort;
 	private final Bootstrap bootstrap;
 
-	public ReConnectHandler(final Bootstrap bootstrap, final HostAndPort hostAndPort,
+	private ReConnectHandler(final Bootstrap bootstrap, final HostAndPort hostAndPort,
 		 final YunChannelGroup yunChannelGroup) {
 		this.yunChannelGroup = yunChannelGroup;
 		this.hostAndPort = hostAndPort;
 		this.bootstrap = bootstrap;
 	}
 
+	public static ReConnectHandler create(final Bootstrap bootstrap, final HostAndPort hostAndPort,
+			 final YunChannelGroup yunChannelGroup) {
+			return new ReConnectHandler(bootstrap, hostAndPort, yunChannelGroup);
+		}
+	
 	@Override
 	public void channelActive(ChannelHandlerContext ctx) throws Exception {
 		ctx.fireChannelActive();
-		final String channelID = ctx.channel().id().toString();
-		log.info("当前链路已经激活了channel ID 为：" + channelID + "，激活时间为：" + new Date());
+		final String channelID = getChannelID(ctx);
+		log.info(channelID + " id, channel is active, open time:" + new Date());
 	}
 
 	@Override
 	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		closeChannelAndFire(ctx);
-		final String channelID = ctx.channel().id().toString();
-		log.info("当前链路已经关闭channel ID 为：" + channelID + "，关闭时间为：" + new Date());
-		if (!buttonForReconnect.get()) {
-			log.info("检测的watchDog重连功能已经被关闭，直接返回！channel ID:" + channelID);
+		final String channelID = getChannelID(ctx);
+		log.info(channelID +" id, has closed, close time:" + new Date());
+		if (!reconnect.get()) {
+			log.info("button of channel reconnect has been trunoff, then return");
 		} else {
-			buttonOnDoThis(channelID, ctx);
+			reconnect(channelID);
 		}
 	}
 
+	private String getChannelID(final ChannelHandlerContext ctx){
+		final String channelID = ctx.channel().id().toString();
+		return channelID;
+	}
+	
+	
 	private void closeChannelAndFire(final ChannelHandlerContext ctx) {
 		ctx.channel().close();
 		ctx.fireChannelInactive();
 	}
 
-	private void buttonOnDoThis(final String channelID) {
-		if (channelGroupStateHasSet()) {
-			log.info("重连检测狗发现已经有其他线程将channelgroup的状态设置，此channel的inactive触发就不进行重连了，channel ID：" + channelID);
+	private void reconnect(final String channelID) {
+		if (checkState()) {
+			log.info(channelID+ " channel id, has found channelGroup state has been inactive");
 		} else {
 			currentCAS(channelID);
 		}
 	}
 
-	private boolean channelGroupStateHasSet() {
+	private boolean checkState() {
 		final boolean hasSet = yunChannelGroup.getState();
 		if (false == hasSet) {
 			return true;
@@ -84,17 +91,20 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 	private void currentCAS(final String channelID) {
 		if (yunChannelGroup.CAS_Set_Inactive()) {
 			doReconnect();
-			log.info("重连检测狗线程成功将channelgroup的状态设置，此channel的inactive已经触发重连，channel ID：" + channelID);
+			log.info(channelID+" channel id, has put reconnect thread into scheduledPool");
 		} else {
-			log.info("重连检测狗发现已经有其他线程将channelgroup的状态设置，此channel的inactive触发就不进行重连了，channel ID：" + channelID);
+			log.info(channelID+ " channel id, has found other thread has put reconnect thread into scheduledPool already");
 		}
 	}
 
-	private void doReconnect(final ChannelHandlerContext ctx) {
+	private void doReconnect() {
 		ReConnectRunner reconnectRunner = ReConnectRunner.create(buildNettyHolder(), buildExecuteHolder(),yunChannelGroup);
-		Future<?> futureReconnect = null;
-		futureReconnect = Reconnect_ThreadPoolExecutor.scheduleWithFixedDelay(reconnectRunner, 1, 3, TimeUnit.SECONDS);
-		Futures_ForReconnect.offer(futureReconnect);
+		Future<?> future = null;
+		future = reconnectPool.scheduleWithFixedDelay(reconnectRunner, 1, 3, TimeUnit.SECONDS);
+		final boolean offer= futureQueue.offer(future);
+		if(!offer){
+			log.error("occur unkonw error, future offer queue must be return 'true'");
+		}
 	}
 
 	private NettyHolder buildNettyHolder() {
@@ -102,22 +112,23 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 	}
 
 	private ExecuteHolder buildExecuteHolder() {
-		return ExecuteHolder.create(Reconnect_ThreadPoolExecutor, Futures_ForReconnect);
+		return ExecuteHolder.create(reconnectPool, futureQueue);
 	}
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 		ctx.channel().close();
 		cause.printStackTrace();
-		log.error("管道channel出现异常！！！");
+		final String channelId=getChannelID(ctx);
+		log.error("channel has closed, id:"+channelId);
 	}
 
 	public void turnOffReconnect() {
-		buttonForReconnect.set(false);
+		reconnect.set(false);
 	}
 
 	public void turnOnReconnect() {
-		buttonForReconnect.set(true);
+		reconnect.set(true);
 	}
 
 }
