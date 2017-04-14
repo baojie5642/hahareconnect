@@ -12,7 +12,7 @@ public class YunChannelGroup {
 
 	private static final Logger log = LoggerFactory.getLogger(YunChannelGroup.class);
 	private final AtomicBoolean isActive = new AtomicBoolean(false);
-	private static final int DEFULT_CHANNEL_NUM = 8;
+	public static final int DEFULT_CHANNEL_NUM = 8;
 	private final ArrayList<Channel> channels;
 
 	private YunChannelGroup() {

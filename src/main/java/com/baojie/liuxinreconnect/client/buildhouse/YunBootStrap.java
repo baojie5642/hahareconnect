@@ -25,8 +25,9 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 
 public class YunBootStrap {
-	
+
 	private final AtomicReference<ReConnectHandler> watchHandlerCache = new AtomicReference<ReConnectHandler>(null);
+	public static final int DEFULT_THREAD_NUM = Runtime.getRuntime().availableProcessors() * 2;
 	private final AtomicBoolean hasDestory = new AtomicBoolean(false);
 	private final AtomicBoolean hasInit = new AtomicBoolean(false);
 	private volatile EventLoopGroup eventLoopGroup;
@@ -42,6 +43,10 @@ public class YunBootStrap {
 
 	public static YunBootStrap create(final HostAndPort hostAndPort, final int workThread) {
 		return new YunBootStrap(hostAndPort, workThread);
+	}
+
+	public static YunBootStrap create(final HostAndPort hostAndPort) {
+		return new YunBootStrap(hostAndPort, DEFULT_THREAD_NUM);
 	}
 
 	public ReConnectHandler init(final YunChannelGroup yunChannelGroup,
@@ -166,6 +171,14 @@ public class YunBootStrap {
 		} else {
 			return channel;
 		}
+	}
+
+	public HostAndPort getHostAndPort() {
+		return hostAndPort;
+	}
+
+	public int getWorkThread() {
+		return workThread;
 	}
 
 	public void destory() {

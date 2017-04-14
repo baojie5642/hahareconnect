@@ -70,8 +70,8 @@ public class YunNettyClientManager {
 	}
 
 	private void buildClient(final int channelNumInOneClient, final int clientNum, final HostAndPort hostAndPort) {
-		YunNettyClient heartBeatsClient = YunNettyClient.create(channelNumInOneClient, hostAndPort);
-		heartBeatsClient.connect();
+		YunNettyClient heartBeatsClient = YunNettyClient.create(hostAndPort,channelNumInOneClient, channelNumInOneClient);
+		heartBeatsClient.init();
 		mapForClient.putIfAbsent(clientNum, heartBeatsClient);
 	}
 

@@ -1,11 +1,6 @@
 package com.baojie.liuxinreconnect.client;
 
-import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-
-import io.netty.channel.EventLoopGroup;
-
-
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,6 +14,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.baojie.liuxinreconnect.client.buildhouse.YunBootStrap;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
 import com.baojie.liuxinreconnect.client.sendrunner.MessageSendRunner;
 import com.baojie.liuxinreconnect.client.watchdog.ReConnectHandler;
@@ -34,100 +31,98 @@ import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupCanNotUs
 
 public class YunNettyClient {
 
-	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap = new ConcurrentHashMap<String, RecycleFuture<MessageResponse>>(
+	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap = new ConcurrentHashMap<String, RecycleFuture<MessageResponse>>(
 			8192);
-	private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> messageFutureQueue = new ConcurrentLinkedQueue<>();
+	private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> futureQueue = new ConcurrentLinkedQueue<>();
 	private final YunThreadPoolExecutor sendThreadPool = new YunThreadPoolExecutor(256, 1024, 180, TimeUnit.SECONDS,
 			new SynchronousQueue<>(), YunThreadFactory.create("SendMessageRunner"));
-	
-	private static final int DEFULT_THREAD_NUM=Runtime.getRuntime().availableProcessors()*2;
-	
 	private static final Logger log = LoggerFactory.getLogger(YunNettyClient.class);
-	
 	private final AtomicBoolean hasConnect = new AtomicBoolean(false);
-	
 	private final AtomicBoolean hasClosed = new AtomicBoolean(false);
-	
 	private final ThreadLocalRandom random = ThreadLocalRandom.current();
-	
-	private volatile ReConnectHandler connectionWatchdog;
-	private volatile EventLoopGroup eventLoopGroup;
-	private final YunChannelGroup yunChannelGroup;
+    private final YunChannelGroup yunChannelGroup;
+	private volatile ReConnectHandler reConnectHandler;
+	private final YunBootStrap yunBootStrap;
 	private final HostAndPort hostAndPort;
-	private volatile Bootstrap bootstrap;
-	private volatile int howManyChannel;
+	private final int howManyChannel;
+	private final int threadNum;
 
-	private YunNettyClient(final int howManyChannel, final HostAndPort hostAndPort) {
-		this.yunChannelGroup = YunChannelGroup.create(howManyChannel);
-		this.howManyChannel = howManyChannel;
-		this.hostAndPort = hostAndPort;
+	private YunNettyClient(final HostAndPort hostAndPort,final int howManyChannel,final int threadNum) {
+		this.howManyChannel=howManyChannel;
+		this.hostAndPort=hostAndPort;
+		this.threadNum=threadNum;
+		this.yunChannelGroup=YunChannelGroup.create(howManyChannel);
+		this.yunBootStrap=YunBootStrap.create(hostAndPort,threadNum);
 	}
-	
+
 	private YunNettyClient(final HostAndPort hostAndPort) {
-		this.yunChannelGroup = YunChannelGroup.create(howManyChannel);
-		this.hostAndPort = hostAndPort;
+		this.hostAndPort=hostAndPort;
+		this.howManyChannel=YunChannelGroup.DEFULT_CHANNEL_NUM;
+		this.threadNum=YunBootStrap.DEFULT_THREAD_NUM;
+		this.yunChannelGroup=YunChannelGroup.create();
+		this.yunBootStrap=YunBootStrap.create(hostAndPort);
+	}
+	
+	public static YunNettyClient create(final HostAndPort hostAndPort,final int howManyChannel,final int threadNum) {
+		return new YunNettyClient( hostAndPort,howManyChannel,threadNum);
 	}
 
-	public static YunNettyClient create(final int howManyChannel, final HostAndPort hostAndPort) {
-		return new YunNettyClient(howManyChannel, hostAndPort);
-	}
-	
-	
 	public static YunNettyClient create(final HostAndPort hostAndPort) {
 		return new YunNettyClient(hostAndPort);
 	}
 
-	public void connect() {
-		
-	}
-	
-	
-
-	private boolean checkThreadNum(final int threadNum){
-		if(threadNum<0){
-			log.warn("");
-		 	return false;
-		}else {
-			return true;
-		}
-	}
-	
-	
-	private boolean isClientHasConnect() {
+	public void init() {
 		final boolean connect = hasConnect.get();
 		if (connect) {
-			return true;
+			return ;
 		} else {
 			if (hasConnect.compareAndSet(false, true)) {
-				return false;
+				innerInit();
 			} else {
 				log.info("other thread has execute connect already");
-				return true;
 			}
 		}
 	}
 
+	private void innerInit(){
+		initBootAndHandler();
+		initChannelGroup();
+		openState();
+	}
+	
+private void initBootAndHandler(){
+	if(null!=reConnectHandler){
+			throw new NullPointerException();
+		}else {
+			reConnectHandler=yunBootStrap.init(yunChannelGroup, futureMap);
+		}
+}
+	
+private void initChannelGroup(){
+	Channel channel=null;
+	for(int i=0;i<howManyChannel;i++){
+		channel=yunBootStrap.getOneChannel();
+		if(null==channel){
+			throw new NullPointerException();
+		}else {
+			yunChannelGroup.addOneChannel(channel);
+		}
+	}
+}
+	
+private void openState(){
+	reConnectHandler.turnOnReconnect();
+	yunChannelGroup.setActive();
+}
 	
 
-	
+	public int getThreadNum() {
+		return threadNum;
+	}
 
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	
-
-	public void turnOffWatchDog() {
-		if (null != connectionWatchdog) {
-			connectionWatchdog.turnOffReconnect();
+	public void turnOffWatchHandler() {
+		if (null != reConnectHandler) {
+			reConnectHandler.turnOffReconnect();
 		}
 	}
 
@@ -141,18 +136,18 @@ public class YunNettyClient {
 
 	public MessageResponse sendMessage(final MessageRequest messageRequest, final int timeOut, final TimeUnit timeUnit)
 			throws Exception {
-		
+
 		if (!yunChannelGroup.getState()) {
 			log.error("发送消息时检测到channelGroup状态为不可用，直接抛出异常，请选择其他IP Client。");
 			throw new ChannelGroupCanNotUseException("ChannelGroup can not use,Please change other IP client.");
 		}
-				final byte[] bytesToSend = SerializationUtil.serialize(messageRequest);
-				final String messageid = messageRequest.getMsgId();
-				CheckNull.checkStringEmpty(messageid);
-				final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture();
-				messageFutureMap.putIfAbsent(messageid, unitedCloudFutureReturnObject);
-				return realSend(bytesToSend, messageid, unitedCloudFutureReturnObject, timeOut, timeUnit);
-		
+		final byte[] bytesToSend = SerializationUtil.serialize(messageRequest);
+		final String messageid = messageRequest.getMsgId();
+		CheckNull.checkStringEmpty(messageid);
+		final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture();
+		futureMap.putIfAbsent(messageid, unitedCloudFutureReturnObject);
+		return realSend(bytesToSend, messageid, unitedCloudFutureReturnObject, timeOut, timeUnit);
+
 	}
 
 	private MessageResponse realSend(final byte[] bytesToSend, final String messageid,
@@ -175,20 +170,19 @@ public class YunNettyClient {
 	private RecycleFuture<MessageResponse> makeFuture() {
 		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue();
 		if (null == unitedCloudFutureReturnObject) {
-			unitedCloudFutureReturnObject = RecycleFuture
-					.createUnitedCloudFuture(MessageResponse.class);
+			unitedCloudFutureReturnObject = RecycleFuture.createUnitedCloudFuture(MessageResponse.class);
 		}
 		return unitedCloudFutureReturnObject;
 	}
 
 	private RecycleFuture<MessageResponse> getFutureFromQueue() {
-		RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = null;
+		RecycleFuture<MessageResponse> recycleFuture = null;
 		try {
-			unitedCloudFutureReturnObject = messageFutureQueue.poll();
+			recycleFuture = futureQueue.poll();
 		} catch (Throwable throwable) {
 			assert true;// ignore
 		}
-		return unitedCloudFutureReturnObject;
+		return recycleFuture;
 	}
 
 	private void handleFutureMapQueue(final String messageid,
@@ -200,7 +194,7 @@ public class YunNettyClient {
 
 	private void removeFurureFromMap(final String messageid) {
 		try {
-			messageFutureMap.remove(messageid);
+			futureMap.remove(messageid);
 		} catch (Throwable throwable) {
 			log.debug("消息future可能已经从map中删除。");
 		}
@@ -210,9 +204,8 @@ public class YunNettyClient {
 		unitedCloudFutureReturnObject.reset();
 	}
 
-	private boolean putFutureIntoQueue(
-			final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
-		return messageFutureQueue.offer(unitedCloudFutureReturnObject);
+	private boolean putFutureIntoQueue(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+		return futureQueue.offer(unitedCloudFutureReturnObject);
 	}
 
 	private void handleMessageReponseAndChannel(MessageResponse messageResponse, final Exception exception)
@@ -243,31 +236,30 @@ public class YunNettyClient {
 
 	public boolean closeClient() {
 		boolean closeSuccess = false;
-		
-		
-			if (hasClosed.get()) {
+
+		if (hasClosed.get()) {
+			log.info("nettyclient已经关闭。");
+			closeSuccess = false;
+		} else {
+			if (hasClosed.compareAndSet(false, true)) {
+				setCloseState();
+				closeChannel();
+				yunChannelGroup.clean();
+				shutNettyClient();
+				hasClosed.set(false);
+				log.info("nettyclient客户端已经关闭。");
+				closeSuccess = true;
+			} else {
 				log.info("nettyclient已经关闭。");
 				closeSuccess = false;
-			} else {
-				if (hasClosed.compareAndSet(false, true)) {
-					setCloseState();
-					closeChannel();
-					yunChannelGroup.clean();
-					shutNettyClient();
-					hasClosed.set(false);
-					log.info("nettyclient客户端已经关闭。");
-					closeSuccess = true;
-				} else {
-					log.info("nettyclient已经关闭。");
-					closeSuccess = false;
-				}
 			}
-		
+		}
+
 		return closeSuccess;
 	}
 
 	private void setCloseState() {
-		connectionWatchdog.turnOffReconnect();
+		reConnectHandler.turnOffReconnect();
 		yunChannelGroup.setInactive();
 
 	}
@@ -286,18 +278,13 @@ public class YunNettyClient {
 	}
 
 	private void shutNettyClient() {
-		if (null != eventLoopGroup) {
-			eventLoopGroup.shutdownGracefully();
-		}
-		if (null != bootstrap) {
-			bootstrap = null;
-		}
+		
 	}
 
 	public void startSend() {
 		MessageSendRunner messageSendRunner = null;
 		for (int i = 0; i < howManyChannel; i++) {
-			messageSendRunner = MessageSendRunner.create(messageFutureMap, yunChannelGroup, i);
+			messageSendRunner = MessageSendRunner.create(futureMap, yunChannelGroup, i);
 			sendThreadPool.submit(messageSendRunner);
 		}
 	}
@@ -307,7 +294,7 @@ public class YunNettyClient {
 	}
 
 	public ConcurrentHashMap<String, RecycleFuture<MessageResponse>> getMessageFutureMap() {
-		return messageFutureMap;
+		return futureMap;
 	}
 
 	public static void main(String[] args) {
@@ -320,9 +307,9 @@ public class YunNettyClient {
 		}
 		HostAndPort hostAndPort = HostAndPort.create("127.0.0.1", port);
 
-		YunNettyClient heartBeatsClient = YunNettyClient.create(1024, hostAndPort);
+		YunNettyClient heartBeatsClient = YunNettyClient.create(hostAndPort,8,16);
 		try {
-			heartBeatsClient.connect();
+			heartBeatsClient.init();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
