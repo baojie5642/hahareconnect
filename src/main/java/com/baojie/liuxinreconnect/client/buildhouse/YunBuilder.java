@@ -1,9 +1,6 @@
 package com.baojie.liuxinreconnect.client.buildhouse;
 
-import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
-import com.baojie.liuxinreconnect.client.watchdog.ReConnectHandler;
 import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
-
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;

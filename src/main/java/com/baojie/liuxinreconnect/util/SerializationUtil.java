@@ -5,6 +5,8 @@ import org.objenesis.ObjenesisStd;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -20,6 +22,9 @@ public class SerializationUtil {
 
 	private static final ConcurrentHashMap<Class<?>, Schema<?>> CachedSchema = new ConcurrentHashMap<Class<?>, Schema<?>>();
 
+	private static final PooledByteBufAllocator alloc = new PooledByteBufAllocator();
+	
+	
 	static {
 		System.getProperties().setProperty("protostuff.runtime.always_use_sun_reflection_factory", "true");
 	}
@@ -43,6 +48,9 @@ public class SerializationUtil {
 		Class<T> cls = (Class<T>) obj.getClass();
 		Schema<T> schema = getSchema(cls);
 		byte[] bytesForBuffer = new byte[LinkedBuffer.DEFAULT_BUFFER_SIZE];
+		
+		//alloc.
+		
 		LinkedBuffer buffer = LinkedBuffer.use(bytesForBuffer);
 		try {
 			bytes = ProtostuffIOUtil.toByteArray(obj, schema, buffer);
@@ -134,4 +142,20 @@ public class SerializationUtil {
 		}
 	}
 
+	public static void main(String args[]){
+		final byte[] bytes=new byte[10];
+		
+		for(int i=0;i<bytes.length;i++){
+			System.out.println( bytes[i]);
+		}
+		
+		
+		
+		
+		
+		
+		
+	}
+	
+	
 }
