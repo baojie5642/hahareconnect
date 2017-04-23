@@ -11,36 +11,40 @@ import io.netty.util.concurrent.Promise;
  */
 public interface ChannelPool extends Closeable {
 
-    /**
-     * Acquire a {@link Channel} from this {@link ChannelPool}. The returned {@link Future} is notified once
-     * the acquire is successful and failed otherwise.
-     *
-     * <strong>Its important that an acquired is always released to the pool again, even if the {@link Channel}
-     * is explicitly closed..</strong>
-     */
-    Future<Channel> acquire();
+	/**
+	 * Acquire a {@link Channel} from this {@link ChannelPool}. The returned
+	 * {@link Future} is notified once the acquire is successful and failed
+	 * otherwise.
+	 *
+	 * <strong>Its important that an acquired is always released to the pool
+	 * again, even if the {@link Channel} is explicitly closed..</strong>
+	 */
+	Future<Channel> acquire();
 
-    /**
-     * Acquire a {@link Channel} from this {@link ChannelPool}. The given {@link Promise} is notified once
-     * the acquire is successful and failed otherwise.
-     *
-     * <strong>Its important that an acquired is always released to the pool again, even if the {@link Channel}
-     * is explicitly closed..</strong>
-     */
-    Future<Channel> acquire(Promise<Channel> promise);
+	/**
+	 * Acquire a {@link Channel} from this {@link ChannelPool}. The given
+	 * {@link Promise} is notified once the acquire is successful and failed
+	 * otherwise.
+	 *
+	 * <strong>Its important that an acquired is always released to the pool
+	 * again, even if the {@link Channel} is explicitly closed..</strong>
+	 */
+	Future<Channel> acquire(final Promise<Channel> promise);
 
-    /**
-     * Release a {@link Channel} back to this {@link ChannelPool}. The returned {@link Future} is notified once
-     * the release is successful and failed otherwise. When failed the {@link Channel} will automatically closed.
-     */
-    Future<Void> release(Channel channel);
+	/**
+	 * Release a {@link Channel} back to this {@link ChannelPool}. The returned
+	 * {@link Future} is notified once the release is successful and failed
+	 * otherwise. When failed the {@link Channel} will automatically closed.
+	 */
+	Future<Void> release(final Channel channel);
 
-    /**
-     * Release a {@link Channel} back to this {@link ChannelPool}. The given {@link Promise} is notified once
-     * the release is successful and failed otherwise. When failed the {@link Channel} will automatically closed.
-     */
-    Future<Void> release(Channel channel, Promise<Void> promise);
+	/**
+	 * Release a {@link Channel} back to this {@link ChannelPool}. The given
+	 * {@link Promise} is notified once the release is successful and failed
+	 * otherwise. When failed the {@link Channel} will automatically closed.
+	 */
+	Future<Void> release(final Channel channel, final Promise<Void> promise);
 
-    @Override
-    void close();
+	@Override
+	void close();
 }
