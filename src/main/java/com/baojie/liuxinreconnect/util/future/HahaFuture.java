@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 
-import com.baojie.liuxinreconnect.util.unsafe.HahaUnsafe;
+import com.baojie.liuxinreconnect.util.unsafe.HaUnsafe;
 
 public class HahaFuture {
 
@@ -175,7 +175,7 @@ public class HahaFuture {
 	private static final long waitersOffset;
 	static {
 		try {
-			UnSafe = HahaUnsafe.getUnsafe();
+			UnSafe = HaUnsafe.getUnsafe();
 			Class<?> k = HahaFuture.class;
 			stateOffset = UnSafe.objectFieldOffset(k.getDeclaredField("state"));
 			waitersOffset = UnSafe.objectFieldOffset(k.getDeclaredField("waiters"));

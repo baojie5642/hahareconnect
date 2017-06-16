@@ -7,12 +7,12 @@ import java.security.PrivilegedExceptionAction;
 
 import sun.misc.Unsafe;
 
-public class HahaUnsafe {
+public class HaUnsafe {
 
 	private static final String Unsafe_Object_Name = "theUnsafe";
 
-	private HahaUnsafe() {
-
+	private HaUnsafe() {
+		throw new IllegalArgumentException();
 	}
 
 	public static Unsafe getUnsafe() {

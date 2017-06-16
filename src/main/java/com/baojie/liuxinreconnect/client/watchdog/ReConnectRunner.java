@@ -1,6 +1,5 @@
 package com.baojie.liuxinreconnect.client.watchdog;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -8,7 +7,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
-import com.baojie.liuxinreconnect.util.threadall.pool.YunScheduledThreadPool;
+import com.baojie.liuxinreconnect.util.threadall.pool.HaScheduledPool;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -34,7 +33,7 @@ public class ReConnectRunner implements Runnable {
 
 	@Override
 	public void run() {
-		final YunScheduledThreadPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
+		final HaScheduledPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
 		final String threadName = Thread.currentThread().getName();
 		if (canReturn(scheduledThreadPoolExecutor)) {
 			return;
@@ -43,7 +42,7 @@ public class ReConnectRunner implements Runnable {
 		}
 	}
 
-	private boolean canReturn(final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+	private boolean canReturn(final HaScheduledPool scheduledThreadPoolExecutor) {
 		final boolean scheduledShutDown = poolShutDown(scheduledThreadPoolExecutor);
 		final boolean channelHasActive = isChannelsHasCreated();
 		if (scheduledShutDown || channelHasActive) {
@@ -53,7 +52,7 @@ public class ReConnectRunner implements Runnable {
 		}
 	}
 
-	private boolean poolShutDown(final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+	private boolean poolShutDown(final HaScheduledPool scheduledThreadPoolExecutor) {
 		boolean scheduledShutDown = false;
 		if (scheduledThreadPoolExecutor.isShutdown()) {
 			log.error("reconnect scheduledpool has shoutdown unexpect");
@@ -96,12 +95,12 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private void cleanWorkQueue() {
-		final YunScheduledThreadPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
+		final HaScheduledPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
 		scheduledThreadPoolExecutor.purge();
 		scheduledThreadPoolExecutor.remove(this);
 	}
 
-	private void doReconnect(final String threadName, final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+	private void doReconnect(final String threadName, final HaScheduledPool scheduledThreadPoolExecutor) {
 			if(isChannelsHasCreated()){
 				return;
 			}else {
@@ -110,7 +109,7 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private void reconnectAfterChannelFutureDone(final String threadName,
-			final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+			final HaScheduledPool scheduledThreadPoolExecutor) {
 		ChannelFuture newChannelFuture = null;
 		newChannelFuture = getAndWaitForFutureDone();
 		if (newChannelFuture.isDone() && newChannelFuture.isSuccess()) {
@@ -122,7 +121,7 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private void channelFutureDoneThenDoThis(final ChannelFuture newChannelFuture, final String threadName,
-			final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+			final HaScheduledPool scheduledThreadPoolExecutor) {
 		log.info("本次线程" + threadName + "执行重连时获取的channelFuture成功。");
 		if (!yunChannelGroup.getState()) {
 			channelInactiveDo(newChannelFuture, threadName);
@@ -167,13 +166,13 @@ public class ReConnectRunner implements Runnable {
 	}
 
 	private void channelInactiveDo(final ChannelFuture newChannelFuture, final String threadName) {
-		final YunScheduledThreadPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
+		final HaScheduledPool scheduledThreadPoolExecutor = executeHolder.getScheduledThreadPoolExecutor();
 			realDoTheWork(newChannelFuture, scheduledThreadPoolExecutor);
 			log.info("线程 " + threadName + ",已经将channels全部初始化成功，结束定时重连，已经取消其他全部定时任务。");
 	}
 
 	private void realDoTheWork(final ChannelFuture channelFuture,
-			final YunScheduledThreadPool scheduledThreadPoolExecutor) {
+			final HaScheduledPool scheduledThreadPoolExecutor) {
 		final Bootstrap bootstrap = nettyHolder.getBootstrap();
 		cancleChannelsAndCleanGroup(yunChannelGroup);
 		rebuildChannels(channelFuture, yunChannelGroup, bootstrap);

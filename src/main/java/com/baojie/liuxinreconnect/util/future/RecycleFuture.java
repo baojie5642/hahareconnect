@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 
-import com.baojie.liuxinreconnect.util.unsafe.HahaUnsafe;
+import com.baojie.liuxinreconnect.util.unsafe.HaUnsafe;
 
 public class RecycleFuture<T> {
 
@@ -21,7 +21,6 @@ public class RecycleFuture<T> {
 		this.state = New;
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public static <T> RecycleFuture createUnitedCloudFuture(final Class<T> typeReturn) {
 		if (null == typeReturn) {
 			throw new NullPointerException("'typeReturn' must not be null.");
@@ -221,7 +220,7 @@ public class RecycleFuture<T> {
 	private static final long waitersOffset;
 	static {
 		try {
-			UnSafe = HahaUnsafe.getUnsafe();
+			UnSafe = HaUnsafe.getUnsafe();
 			Class<?> k = RecycleFuture.class;
 			stateOffset = UnSafe.objectFieldOffset(k.getDeclaredField("state"));
 			waitersOffset = UnSafe.objectFieldOffset(k.getDeclaredField("waiters"));

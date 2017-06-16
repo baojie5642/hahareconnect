@@ -1,5 +1,6 @@
 package com.baojie.liuxinreconnect.client.watchdog;
 
+import com.baojie.liuxinreconnect.util.threadall.HaThreadFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
@@ -14,14 +15,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
-import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
-import com.baojie.liuxinreconnect.util.threadall.pool.YunScheduledThreadPool;
+import com.baojie.liuxinreconnect.util.threadall.pool.HaScheduledPool;
 
 @Sharable
 public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 
-	private final YunScheduledThreadPool reconnectPool = new YunScheduledThreadPool(1,
-			YunThreadFactory.create("ReconnectRunner"));
+	private final HaScheduledPool reconnectPool = new HaScheduledPool(1,
+			HaThreadFactory.create("ReconnectRunner"));
 	private final LinkedBlockingQueue<Future<?>> futureQueue = new LinkedBlockingQueue<>(1);
 	private final Logger log = LoggerFactory.getLogger(ReConnectHandler.class);
 	private final AtomicBoolean reconnect = new AtomicBoolean(false);

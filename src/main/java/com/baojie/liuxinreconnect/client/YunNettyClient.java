@@ -1,5 +1,6 @@
 package com.baojie.liuxinreconnect.client;
 
+import com.baojie.liuxinreconnect.util.threadall.HaThreadFactory;
 import io.netty.channel.Channel;
 
 import java.util.List;
@@ -25,8 +26,7 @@ import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.CheckNull;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
 import com.baojie.liuxinreconnect.util.future.RecycleFuture;
-import com.baojie.liuxinreconnect.util.threadall.YunThreadFactory;
-import com.baojie.liuxinreconnect.util.threadall.pool.YunThreadPoolExecutor;
+import com.baojie.liuxinreconnect.util.threadall.pool.HaThreadPool;
 import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupCanNotUseException;
 
 public class YunNettyClient {
@@ -34,8 +34,8 @@ public class YunNettyClient {
 	private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap = new ConcurrentHashMap<String, RecycleFuture<MessageResponse>>(
 			8192);
 	private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> futureQueue = new ConcurrentLinkedQueue<>();
-	private final YunThreadPoolExecutor sendThreadPool = new YunThreadPoolExecutor(256, 1024, 180, TimeUnit.SECONDS,
-			new SynchronousQueue<>(), YunThreadFactory.create("SendMessageRunner"));
+	private final HaThreadPool sendThreadPool = new HaThreadPool(256, 1024, 180, TimeUnit.SECONDS,
+			new SynchronousQueue<>(), HaThreadFactory.create("SendMessageRunner"));
 	private static final Logger log = LoggerFactory.getLogger(YunNettyClient.class);
 	private final AtomicBoolean hasConnect = new AtomicBoolean(false);
 	private final AtomicBoolean hasClosed = new AtomicBoolean(false);
