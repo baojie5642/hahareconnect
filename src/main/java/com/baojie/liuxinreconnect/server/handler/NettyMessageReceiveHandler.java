@@ -20,7 +20,7 @@ public class NettyMessageReceiveHandler extends SimpleChannelInboundHandler<byte
 	@Override
 	public void channelRead0(ChannelHandlerContext ctx, byte[] msg) throws Exception {
 		if (msg instanceof byte[]) {
-			final byte[] bytesFromClient = (byte[]) msg;
+			final byte[] bytesFromClient = msg;
 			if (checkBytesLength(bytesFromClient)) {
 				return;
 			}

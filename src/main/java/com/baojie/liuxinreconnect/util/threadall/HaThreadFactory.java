@@ -5,10 +5,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.baojie.liuxinreconnect.util.HaSecurity;
 import com.baojie.liuxinreconnect.util.HaThreadGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class HaThreadFactory implements ThreadFactory {
 
@@ -53,7 +50,7 @@ public class HaThreadFactory implements ThreadFactory {
 
     private ThreadGroup getThreadGroup()
     {
-        final SecurityManager sm = HaSecurity.getSecurityManager();
+        final SecurityManager sm = System.getSecurityManager();
         final ThreadGroup threadGroup = HaThreadGroup.innerThreadGroup(sm);
         return threadGroup;
     }

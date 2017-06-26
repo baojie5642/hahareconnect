@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.baojie.liuxinreconnect.client.channelgroup.YunChannelGroup;
+import com.baojie.liuxinreconnect.client.channelgroup.HaChannelGroup;
 import com.baojie.liuxinreconnect.message.MessageRequest;
 import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.SerializationUtil;
@@ -25,35 +25,35 @@ public class MessageSendRunner implements Runnable {
 	private final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueue = new LinkedBlockingQueue<>(
 			32);
 	private final AtomicInteger messageID = new AtomicInteger(0);
-	private final YunChannelGroup yunChannelGroup;
+	private final HaChannelGroup haChannelGroup;
 	// 类对象的成员变量，设置成内存可见性，容易控制，并且还是在本地线程内部使用
 	private volatile Channel channel;
 	private final int channelNum;
 
 	private MessageSendRunner(
-			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
-			final YunChannelGroup yunChannelGroup, final int channelNum) {
+            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
+            final HaChannelGroup haChannelGroup, final int channelNum) {
 		this.messageFutureMap = messageFutureMap;
-		this.yunChannelGroup = yunChannelGroup;
+		this.haChannelGroup = haChannelGroup;
 		this.channelNum = channelNum;
 	}
 
 	public static MessageSendRunner create(
-			final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
-			final YunChannelGroup yunChannelGroup, final int channelNum) {
-		return new MessageSendRunner(messageFutureMap, yunChannelGroup, channelNum);
+            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap,
+            final HaChannelGroup haChannelGroup, final int channelNum) {
+		return new MessageSendRunner(messageFutureMap, haChannelGroup, channelNum);
 	}
 
 	@Override
 	public void run() {
 		final String threadName = Thread.currentThread().getName();
 		// 因为是一个循环操作，所以为了避免多次获取类的成员变量的操作码，将其构造成局部变量
-		final YunChannelGroup yunChannelGroupInner = yunChannelGroup;
+		final HaChannelGroup haChannelGroupInner = haChannelGroup;
 		final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMapInner = messageFutureMap;
 		final LinkedBlockingQueue<RecycleFuture<MessageResponse>> messageFutureQueueInner = messageFutureQueue;
 		MessageRequest messageRequest = null;
 		MessageResponse messageResponse = null;
-		channel = getChannelFromGroup(yunChannelGroupInner);
+		channel = getChannelFromGroup(haChannelGroupInner);
 		if (null == channel) {
 			log.error("初次获取channel为null，channelgroup的初始化可能初始化出现问题，请检查！！！");
 			throw new NullPointerException();
@@ -64,7 +64,7 @@ public class MessageSendRunner implements Runnable {
 				loopCheckChannelState();
 			}
 			if (null == channel) {
-				channel = getChannelFromGroup(yunChannelGroupInner);
+				channel = getChannelFromGroup(haChannelGroupInner);
 				innerSleep(6);
 				continue retry0;
 			} else {
@@ -78,8 +78,9 @@ public class MessageSendRunner implements Runnable {
 				messageFutureMapInner.putIfAbsent(messageid, unitedCloudFutureReturnObject);
 				channel.writeAndFlush(bytesToSend, channel.voidPromise());
 				try {
-					messageResponse = unitedCloudFutureReturnObject.get(6, TimeUnit.SECONDS);
+					messageResponse = unitedCloudFutureReturnObject.get(16, TimeUnit.SECONDS);
 					//log.info("消息发送成功" + messageResponse.getMsgId());
+					//System.out.println("消息发送成功" + messageResponse.getMsgId());
 				} catch (Exception e) {
 					handleFutureMapQueue(messageFutureMapInner, messageid, unitedCloudFutureReturnObject,
 							messageFutureQueueInner);
@@ -92,8 +93,8 @@ public class MessageSendRunner implements Runnable {
 		}
 	}
 
-	private Channel getChannelFromGroup(final YunChannelGroup yunChannelGroupInner) {
-		final Channel channel = yunChannelGroupInner.getOneChannel(channelNum);
+	private Channel getChannelFromGroup(final HaChannelGroup haChannelGroupInner) {
+		final Channel channel = haChannelGroupInner.getOneChannel(channelNum);
 		if (null == channel) {
 			log.error("由于channel损坏，再次初始化可能不完整，会再次获取channel。");
 		}
@@ -101,7 +102,7 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	private boolean channesHasBroken() {
-		boolean canUse = yunChannelGroup.getState();
+		boolean canUse = haChannelGroup.getState();
 		if (canUse) {
 			return false;
 		} else {
@@ -110,7 +111,7 @@ public class MessageSendRunner implements Runnable {
 	}
 
 	private void loopCheckChannelState() {
-		while (!yunChannelGroup.getState()) {
+		while (!haChannelGroup.getState()) {
 			innerSleep(3000);
 		}
 	}

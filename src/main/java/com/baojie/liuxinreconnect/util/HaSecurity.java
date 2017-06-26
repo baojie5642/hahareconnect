@@ -1,5 +1,8 @@
 package com.baojie.liuxinreconnect.util;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +46,7 @@ public class HaSecurity {
                 {
                     if (HasInit.compareAndSet(false, true))
                     {
-                        final SecurityManager security = makeNewSecMan();
+                        final SecurityManager security = getUnsafeInner();
                         Security_Manager.set(security);
                         return security;
                     } else
@@ -60,6 +63,24 @@ public class HaSecurity {
             return sm;
         }
     }
+    private static SecurityManager getUnsafeInner() {
+        SecurityManager sm = null;
+        try {
+            sm = AccessController.doPrivileged(action);
+        } catch (final PrivilegedActionException e) {
+            e.printStackTrace();
+        }
+        return sm;
+    }
+
+    private static final PrivilegedExceptionAction<SecurityManager> action = new PrivilegedExceptionAction<SecurityManager>() {
+        @Override
+        public SecurityManager run() throws Exception {
+            final SecurityManager sm = makeNewSecMan();
+            return sm;
+        }
+    };
+
 
     // 这个方法很关键，是会返回null的，一旦返回null，就出大事了，死循环,修了
     private static SecurityManager makeNewSecMan()

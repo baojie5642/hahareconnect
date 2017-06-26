@@ -57,7 +57,7 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
         	if(null!=unitedCloudFutureReturnObject){
         		unitedCloudFutureReturnObject.set(messageResponse);
         	}else {
-        		//log.error("从futureMap中获取的future为null，出错，请检查！！！");
+        		log.error("从futureMap中获取的future为null，出错，请检查！！！");
 			}
         	//log.info(messageResponse.getMsgId()+"  "+messageResponse.toString()+",body:"+messageResponse.getBody());
         }else {

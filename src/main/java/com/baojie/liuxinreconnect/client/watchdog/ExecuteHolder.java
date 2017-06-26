@@ -7,24 +7,24 @@ import com.baojie.liuxinreconnect.util.threadall.pool.HaScheduledPool;
 
 public class ExecuteHolder {
 
-	private final HaScheduledPool scheduledThreadPoolExecutor;
+	private final HaScheduledPool haScheduledPool;
 	private final LinkedBlockingQueue<Future<?>> linkedBlockingQueue;
 
-	private ExecuteHolder(final HaScheduledPool scheduledThreadPoolExecutor,
+	private ExecuteHolder(final HaScheduledPool haScheduledPool,
 			final LinkedBlockingQueue<Future<?>> linkedBlockingQueue) {
 
-		this.scheduledThreadPoolExecutor = scheduledThreadPoolExecutor;
+		this.haScheduledPool = haScheduledPool;
 		this.linkedBlockingQueue = linkedBlockingQueue;
 	}
 
-	public static ExecuteHolder create(final HaScheduledPool scheduledThreadPoolExecutor,
+	public static ExecuteHolder create(final HaScheduledPool haScheduledPool,
 			final LinkedBlockingQueue<Future<?>> linkedBlockingQueue){
-		return new ExecuteHolder(scheduledThreadPoolExecutor, linkedBlockingQueue);
+		return new ExecuteHolder(haScheduledPool, linkedBlockingQueue);
 	}
 	
 	
-	public HaScheduledPool getScheduledThreadPoolExecutor() {
-		return scheduledThreadPoolExecutor;
+	public HaScheduledPool getHaScheduledPool() {
+		return haScheduledPool;
 	}
 
 	public LinkedBlockingQueue<Future<?>> getLinkedBlockingQueue() {
