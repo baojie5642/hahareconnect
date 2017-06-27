@@ -11,59 +11,48 @@ import java.util.concurrent.locks.LockSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HaSecurity {
+public final class HaSecurity {
 
     private static final Logger log = LoggerFactory.getLogger(HaSecurity.class);
     private static final AtomicBoolean HasInit = new AtomicBoolean(false);
     private static final AtomicReference<SecurityManager> Security_Manager = new AtomicReference<SecurityManager>(null);
     private static final int Loop = 6;
 
-    private HaSecurity()
-    {
+    private HaSecurity() {
         throw new IllegalArgumentException();
     }
 
-    public static SecurityManager getSecurityManager()
-    {
+    public static final SecurityManager getSecurityManager() {
         SecurityManager sm = null;
         sm = System.getSecurityManager();
-        if (null == sm)
-        {
+        if (null == sm) {
             sm = Security_Manager.get();
-            if (null == sm)
-            {
-                if (HasInit.get() == true)
-                {
+            if (null == sm) {
+                if (HasInit.get() == true) {
                     sm = Security_Manager.get();
-                    if (null == sm)
-                    {
+                    if (null == sm) {
                         return waitFinish();
-                    } else
-                    {
+                    } else {
                         return sm;
                     }
-                } else
-                {
-                    if (HasInit.compareAndSet(false, true))
-                    {
+                } else {
+                    if (HasInit.compareAndSet(false, true)) {
                         final SecurityManager security = getUnsafeInner();
                         Security_Manager.set(security);
                         return security;
-                    } else
-                    {
+                    } else {
                         return waitFinish();
                     }
                 }
-            } else
-            {
+            } else {
                 return sm;
             }
-        } else
-        {
+        } else {
             return sm;
         }
     }
-    private static SecurityManager getUnsafeInner() {
+
+    private static final SecurityManager getUnsafeInner() {
         SecurityManager sm = null;
         try {
             sm = AccessController.doPrivileged(action);
@@ -73,72 +62,59 @@ public class HaSecurity {
         return sm;
     }
 
-    private static final PrivilegedExceptionAction<SecurityManager> action = new PrivilegedExceptionAction<SecurityManager>() {
-        @Override
-        public SecurityManager run() throws Exception {
-            final SecurityManager sm = makeNewSecMan();
-            return sm;
-        }
-    };
+    private static final PrivilegedExceptionAction<SecurityManager> action = new
+            PrivilegedExceptionAction<SecurityManager>() {
+                @Override
+                public SecurityManager run() throws Exception {
+                    final SecurityManager sm = makeNewSecMan();
+                    return sm;
+                }
+            };
 
 
     // 这个方法很关键，是会返回null的，一旦返回null，就出大事了，死循环,修了
-    private static SecurityManager makeNewSecMan()
-    {
+    private static final SecurityManager makeNewSecMan() {
         SecurityManager securityManager = null;
-        try
-        {
+        try {
             securityManager = new SecurityManager();
             System.setSecurityManager(securityManager);
             securityManager = System.getSecurityManager();
-        } catch (Throwable throwable)
-        {
-            securityManager = null;
+        } catch (Throwable throwable) {
             throwable.printStackTrace();
             log.error("could occur error");
         }
         return securityManager;
     }
 
-    private static SecurityManager waitFinish()
-    {
+    private static final SecurityManager waitFinish() {
         SecurityManager sm = null;
         boolean init = false;
         int i = 0;
         retry:
-        for (; ; )
-        {
+        for (; ; ) {
             sm = Security_Manager.get();
-            if (null == sm)
-            {
+            if (null == sm) {
                 Thread.yield();
                 sm = Security_Manager.get();
-                if (null == sm)
-                {
+                if (null == sm) {
                     init = HasInit.get();
-                    if (init)
-                    {
+                    if (init) {
                         //不管是什么都会返回，有可能是null
                         sm = Security_Manager.get();
                         break retry;
-                    } else
-                    {
+                    } else {
                         i++;
-                        if (i == Loop)
-                        {
+                        if (i == Loop) {
                             sm = Security_Manager.get();
                             break retry;
-                        } else
-                        {
+                        } else {
                             LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(6, TimeUnit.MICROSECONDS));
                         }
                     }
-                } else
-                {
+                } else {
                     break retry;
                 }
-            } else
-            {
+            } else {
                 break retry;
             }
         }
@@ -147,25 +123,20 @@ public class HaSecurity {
 
     public static class InnerRun implements Runnable {
 
-        public InnerRun()
-        {
+        public InnerRun() {
 
         }
 
         @Override
-        public void run()
-        {
-            for (int i = 0; i < 200000000; i++)
-            {
+        public void run() {
+            for (int i = 0; i < 200000000; i++) {
                 //LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(3, TimeUnit.MILLISECONDS));
                 SecurityManager securityManager = null;
                 securityManager = HaSecurity.getSecurityManager();
-                if (null == securityManager)
-                {
+                if (null == securityManager) {
                     throw new NullPointerException(Thread.currentThread().getName() + ":get securityManager is " +
                             "null**************************************************************************");
-                } else
-                {
+                } else {
                     System.out.println(Thread.currentThread().getName() + ": is ok");
                 }
                 //LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(3, TimeUnit.MILLISECONDS));
@@ -174,12 +145,10 @@ public class HaSecurity {
     }
 
 
-    public static void main(String args[])
-    {
+    public static void main(String args[]) {
         InnerRun innerRun = null;
         Thread thread = null;
-        for (int i = 0; i < 2000; i++)
-        {
+        for (int i = 0; i < 2000; i++) {
             innerRun = new InnerRun();
             thread = new Thread(innerRun, "test-inner-" + i);
             thread.start();

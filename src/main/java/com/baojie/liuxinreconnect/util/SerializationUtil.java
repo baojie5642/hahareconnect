@@ -19,63 +19,43 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
-public class SerializationUtil {
+public final class SerializationUtil {
 
     private static final ConcurrentHashMap<Class<?>, Schema<?>> CachedSchema = new ConcurrentHashMap<Class<?>,
             Schema<?>>();
     private static final Logger log = LoggerFactory.getLogger(SerializationUtil.class);
     private static final Objenesis objenesis = new ObjenesisStd(true);
-    private static final ConcurrentLinkedQueue<byte[]> Byte_Cache=new ConcurrentLinkedQueue<>();
-    private static final ConcurrentLinkedQueue<byte[]> Temp=new ConcurrentLinkedQueue<>();
-
 
     static {
         System.getProperties().setProperty("protostuff.runtime.always_use_sun_reflection_factory", "true");
-        for(int i=0;i<4;i++){
-            BytesClean bytesClean=BytesClean.create(Temp,Byte_Cache);
-            Thread thread=new Thread(bytesClean,"bytes_clean");
-            thread.start();
-        }
     }
 
     private SerializationUtil() {
         throw new IllegalArgumentException();
     }
 
-    public static <T> byte[] serialize(final T obj) {
-        if (null == obj) {
-            log.error("'T obj' must not be null.");
-            throw new NullPointerException("'T obj' must not be null.");
-        }
+    public static final <T> byte[] serialize(final T obj) {
+        CheckNull.checkNull(obj, "'T obj' must not be null");
         final byte[] realBytes = realBytes(obj);
         return realBytes;
     }
 
-    private static <T> byte[] realBytes(final T obj) {
-        byte[] bytes = null;
-        Class<T> cls = (Class<T>) obj.getClass();
-        Schema<T> schema = getSchema(cls);
-        byte[] bytesForBuffer = Byte_Cache.poll();
-        if(null==bytesForBuffer){
-            bytesForBuffer=new byte[LinkedBuffer.DEFAULT_BUFFER_SIZE];
-        }
-        LinkedBuffer buffer = LinkedBuffer.use(bytesForBuffer);
+    private static final <T> byte[] realBytes(final T obj) {
+        final Class<T> cls = (Class<T>) obj.getClass();
+        final Schema<T> schema = getSchema(cls);
+        byte[] useBytes = new byte[LinkedBuffer.DEFAULT_BUFFER_SIZE];
+        LinkedBuffer buffer = LinkedBuffer.use(useBytes);
+        byte[] bytes;
         try {
-            bytes = ProtostuffIOUtil.toByteArray(obj, schema, buffer);
-            if ((null == bytes) || (bytes.length == 0)) {
-                bytes = new byte[0];
-            }
+            bytes = work(obj, schema, buffer);
         } finally {
-            releaseResource(buffer, bytesForBuffer);
+            release(buffer, useBytes);
         }
         return bytes;
     }
 
-    private static <T> Schema<T> getSchema(final Class<T> cls) {
-        if (null == cls) {
-            log.error("'Class<T> cls' must not be null.");
-            throw new NullPointerException("'Class<T> cls' must not be null.");
-        }
+    private static final <T> Schema<T> getSchema(final Class<T> cls) {
+        CheckNull.checkNull(cls, "'Class<T> cls' must not be null");
         Schema<T> schema = (Schema<T>) CachedSchema.get(cls);
         if (null == schema) {
             setSystemProperties();
@@ -87,21 +67,33 @@ public class SerializationUtil {
         return schema;
     }
 
-    private static void setSystemProperties() {
+    private static final void setSystemProperties() {
 
     }
 
-    private static <T> void releaseResource(LinkedBuffer buffer, byte bytesForBuffer[]) {
+    private static final <T> byte[] work(final T obj, final Schema<T> schema, final LinkedBuffer buffer) {
+        byte[] bytes = null;
+        try {
+            bytes = ProtostuffIOUtil.toByteArray(obj, schema, buffer);
+        } finally {
+            if ((null == bytes) || (bytes.length == 0)) {
+                bytes = new byte[0];
+            }
+        }
+        return bytes;
+    }
+
+    private static final void release(LinkedBuffer buffer, byte[] useBytes) {
         if (null != buffer) {
             buffer.clear();
             buffer = null;
         }
-        if (null != bytesForBuffer) {
-            Temp.offer(bytesForBuffer);
+        if (null != useBytes) {
+            useBytes = null;
         }
     }
 
-    public static <T> T deserialize(final byte[] bytes, final Class<T> cls) {
+    public static final <T> T deserialize(final byte[] bytes, final Class<T> cls) {
         innerCheck(cls, bytes);
         final T message = getInstanceInner(cls);
         final Schema<T> schema = getSchema(cls);
@@ -113,7 +105,13 @@ public class SerializationUtil {
         return message;
     }
 
-    private static <T> T getInstanceInner(final Class<T> cls) {
+    private static final <T> void innerCheck(final Class<T> cls, final byte[] bytes) {
+        CheckNull.checkNull(cls, "'Class<T> cls' must not be null");
+        CheckNull.checkByteArrayNull(bytes, "'byte[] bytes' must not be null");
+        CheckNull.checkByteArrayZero(bytes, "'byte[] bytes.length' must not be zero");
+    }
+
+    private static final <T> T getInstanceInner(final Class<T> cls) {
         final T t = objenesis.newInstance(cls);
         if (null != t) {
             return t;
@@ -122,122 +120,22 @@ public class SerializationUtil {
         }
     }
 
-    private static <T> T localGet(final Class<T> cls) {
+    private static final <T> T localGet(final Class<T> cls) {
         T t = null;
         try {
             t = cls.newInstance();
         } catch (Throwable throwable) {
             throwable.printStackTrace();
-            t = null;
-            throw new NullPointerException("get Object by cls.newInstance() must not null.");
+            CheckNull.checkNull(null, "get Object by cls.newInstance() must not null");
         }
         return t;
-    }
-
-    private static <T> void innerCheck(final Class<T> cls, final byte[] bytes) {
-        if (null == cls) {
-            log.error("'Class<T> cls' must not be null.");
-            throw new NullPointerException("'Class<T> cls' must not be null.");
-        }
-        if (null == bytes) {
-            log.error("'byte[] bytes' must not be null.");
-            throw new NullPointerException("'byte[] bytes' must not be null.");
-        }
-        if (bytes.length == 0) {
-            log.error("'byte[] bytes.length' must not be zero.");
-            throw new IllegalArgumentException("'byte[] bytes.length' must not be zero.");
-        }
-    }
-
-    private static final class BytesClean implements Runnable{
-
-        private final ConcurrentLinkedQueue<byte[]> temp;
-
-        private final ConcurrentLinkedQueue<byte[]> cache;
-
-        private final AtomicBoolean work=new AtomicBoolean(true);
-
-        private BytesClean(final ConcurrentLinkedQueue<byte[]> temp,final ConcurrentLinkedQueue<byte[]> cache){
-            this.temp=temp;
-            this.cache=cache;
-        }
-
-        public static BytesClean create(final ConcurrentLinkedQueue<byte[]> temp,final ConcurrentLinkedQueue<byte[]> cache){
-            return  new BytesClean(temp,cache);
-        }
-
-        @Override
-        public void run(){
-            final Thread thread=Thread.currentThread();
-            int kk=0;
-            byte[] bytes=null;
-            for(;;){
-                boolean stop=work.get();
-                if(stop){
-                    bytes=get();
-                    if(null!=bytes){
-                        doWork(bytes);
-                    }else {
-                        bytes=get();
-                        if(null!=bytes){
-                            doWork(bytes);
-                        }else{
-                            park();
-                        }
-                    }
-                }else {
-                    if(thread.isInterrupted()){
-                        break;
-                    }else{
-                        if(kk==3){
-                            break;
-                        }else {
-                            kk++;
-                        }
-                    }
-                }
-            }
-        }
-
-        private byte[] get(){
-            return temp.poll();
-        }
-
-        public boolean put(final byte[] bytes){
-            if(null!=bytes){
-                return cache.offer(bytes);
-            }else {
-                return false;
-            }
-        }
-
-        private void doWork(final byte[] bytes){
-            if(null!=bytes){
-                Arrays.fill(bytes,(byte)0);
-                put(bytes);
-            }
-        }
-
-        private void park(){
-            LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(2,TimeUnit.NANOSECONDS));
-        }
-
-        public void stop(){
-            if(work.get()){
-                work.compareAndSet(true,false);
-            }else {
-                return;
-            }
-        }
-
-
     }
 
     public static void main(String args[]) {
         final byte[] bytes = new byte[10];
 
         for (int i = 0; i < bytes.length; i++) {
-            bytes[i]=1;
+            bytes[i] = 1;
         }
 
         for (int i = 0; i < bytes.length; i++) {
