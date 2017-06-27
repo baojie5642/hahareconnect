@@ -5,9 +5,10 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
+import com.baojie.liuxinreconnect.util.CheckNull;
 import sun.misc.Unsafe;
 
-public class HaUnsafe {
+public final class HaUnsafe {
 
 	private static final String Unsafe_Object_Name = "theUnsafe";
 
@@ -17,9 +18,7 @@ public class HaUnsafe {
 
 	public static Unsafe getUnsafe() {
 		final Unsafe unsafe = getUnsafeInner();
-		if (unsafe == null) {
-			throw new NullPointerException("unsafe must not be null");
-		}
+		CheckNull.checkNull(unsafe,"unsafe must not be null");
 		return unsafe;
 	}
 
@@ -53,9 +52,7 @@ public class HaUnsafe {
 			field = null;
 			e.printStackTrace();
 		}
-		if (null == field) {
-			throw new NullPointerException("field get from unsafe must not be null");
-		}
+		CheckNull.checkNull(field,"field get from unsafe must not be null");
 		return field;
 	}
 
@@ -70,9 +67,7 @@ public class HaUnsafe {
 			unsafe = null;
 			e.printStackTrace();
 		}
-		if (null == unsafe) {
-			throw new NullPointerException("unsafe must not be null");
-		}
+		CheckNull.checkNull(field,"unsafe must not be null");
 		return unsafe;
 	}
 

@@ -7,18 +7,30 @@ import org.slf4j.LoggerFactory;
 
 import com.baojie.liuxinreconnect.util.CheckNull;
 
-public class HaUncaughtException implements UncaughtExceptionHandler {
+public final class HaUncaughtException implements UncaughtExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(HaUncaughtException.class);
+    private static volatile HaUncaughtException Instance;
 
-    public HaUncaughtException()
-    {
+    public HaUncaughtException() {
 
     }
 
+    public static HaUncaughtException getInstance() {
+        if (null != Instance) {
+            return Instance;
+        } else {
+            synchronized (HaUncaughtException.class) {
+                if (null == Instance) {
+                    Instance = new HaUncaughtException();
+                }
+                return Instance;
+            }
+        }
+    }
+
     @Override
-    public void uncaughtException(final Thread t, final Throwable e)
-    {
+    public void uncaughtException(final Thread t, final Throwable e) {
         innerCheck(t, e);
         final String threadName = getThreadName(t);
         haInterrupted(t);
@@ -26,38 +38,30 @@ public class HaUncaughtException implements UncaughtExceptionHandler {
                 ());
     }
 
-    private void innerCheck(final Thread t, final Throwable e)
-    {
-        CheckNull.checkNull(t);
-        CheckNull.checkNull(e);
+    private void innerCheck(final Thread t, final Throwable e) {
+        CheckNull.checkNull(t, "thread");
+        CheckNull.checkNull(e, "throwable");
     }
 
-    private String getThreadName(final Thread thread)
-    {
+    private String getThreadName(final Thread thread) {
         final String string = Thread.currentThread().getName();
-        CheckNull.checkStringNull(string);
+        CheckNull.checkStringNull(string, "thread name");
         return string;
     }
 
-    private void haInterrupted(final Thread t)
-    {
-        try
-        {
+    private void haInterrupted(final Thread t) {
+        try {
             t.interrupt();
-        } finally
-        {
+        } finally {
             alwaysInterrupt(t);
         }
     }
 
-    private void alwaysInterrupt(final Thread t)
-    {
-        if (!t.isInterrupted())
-        {
+    private void alwaysInterrupt(final Thread t) {
+        if (!t.isInterrupted()) {
             t.interrupt();
         }
-        if (t.isAlive())
-        {
+        if (t.isAlive()) {
             t.interrupt();
         }
     }
