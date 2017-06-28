@@ -64,7 +64,7 @@ public class YunNettyClientManager {
 		HostAndPort hostAndPort = null;
 		for (int i = 0; i < clientNum; i++) {
 			hostAndPort = clientsIPList.get(i);
-			CheckNull.checkNull(hostAndPort);
+			CheckNull.checkNull(hostAndPort,"hostAndPort");
 			buildClient(channelNumInOneClient, i, hostAndPort);
 		}
 	}
@@ -84,7 +84,7 @@ public class YunNettyClientManager {
 		while (hasRetryTimes <= retryTimes) {
 			whichClient = getRetryClientNum(whichClient);
 			yunNettyClient = mapForClient.get(whichClient);
-			CheckNull.checkNull(yunNettyClient);
+			CheckNull.checkNull(yunNettyClient,"yunNettyClient");
 			try {
 				messageResponse = yunNettyClient.sendMessage(messageRequest, timeOut, timeUnit);
 				return messageResponse;
@@ -175,7 +175,7 @@ public class YunNettyClientManager {
 	}
 
 	private String[] splitArray(final String stringArray, final String splitFlag) {
-		CheckNull.checkStringNull(stringArray);
+		CheckNull.checkStringNull(stringArray,"stringArray");
 		final String[] addresses = splitMyArray(stringArray, splitFlag);
 		if (checkStringArrayCanUse(addresses)) {
 			return addresses;
@@ -191,7 +191,7 @@ public class YunNettyClientManager {
 	}
 
 	private boolean checkStringArrayCanUse(final String[] addresses) {
-		CheckNull.checkStringArrayNull(addresses);
+		CheckNull.checkStringArrayNull(addresses,"addresses");
 		if (null == addresses) {
 			return false;
 		} else if (addresses.length == 0) {

@@ -58,8 +58,8 @@ public final class HaChannelGroup {
 
     public Channel getOneChannel(final int channelId) {
         Channel channel = null;
-        if (channelId < 0) {
-            log.warn("'channelId < 0', return null");
+        if (channelId <= 0) {
+            log.warn("'channelId <= 0', return null");
             return channel;
         } else {
             channel = getChannel(channelId);

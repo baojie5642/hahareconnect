@@ -22,7 +22,7 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 
     private final HaScheduledPool reconnectPool = new HaScheduledPool(1,
             HaThreadFactory.create("reconnectRunner"));
-    private final LinkedBlockingQueue<Future<?>> futureQueue = new LinkedBlockingQueue<>(1);
+    private final LinkedBlockingQueue<Future<?>> future = new LinkedBlockingQueue<>(1);
     private final Logger log = LoggerFactory.getLogger(ReConnectHandler.class);
     private final AtomicBoolean reconnect = new AtomicBoolean(false);
     private final HaChannelGroup haChannelGroup;
@@ -43,16 +43,16 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        ctx.fireChannelActive();
         final String channelID = getChannelID(ctx);
-        log.info(channelID + " id, channel is active, open time:" + new Date());
+        log.info("channel_Id:" + channelID + ", channel is active, open time:" + new Date());
+        ctx.fireChannelActive();
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         closeChannelAndFire(ctx);
         final String channelID = getChannelID(ctx);
-        log.info(channelID + " id, has closed, close time:" + new Date());
+        log.info("channel_Id:" + channelID + ", channel is close, close time:" + new Date());
         if (!reconnect.get()) {
             log.info("button of channel reconnect has been trunoff, then return");
         } else {
@@ -65,17 +65,16 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
         return channelID;
     }
 
-
     private void closeChannelAndFire(final ChannelHandlerContext ctx) {
         ctx.channel().close();
         ctx.fireChannelInactive();
     }
 
-    private void reconnect(final String channelID) {
+    private void reconnect(final String channelId) {
         if (checkState()) {
-            log.info(channelID + " channel id, has found channelGroup state has been inactive");
+            log.info("channel_id:" + channelId + ", has found channelGroup state has been inactive");
         } else {
-            currentCAS(channelID);
+            currentCAS(channelId);
         }
     }
 
@@ -88,25 +87,23 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void currentCAS(final String channelID) {
+    private void currentCAS(final String channelId) {
         if (haChannelGroup.casInactive()) {
             doReconnect();
-            log.info(channelID + " channel id, has put reconnect thread into scheduledPool");
+            log.info("channel_id:" + channelId + ", has put reconnect thread into scheduledPool");
         } else {
             log.info(
-                    channelID + " channel id, has found other thread has put reconnect thread into scheduledPool " +
-                            "already");
+                    "channel_id:" + channelId + ", has found other thread has put reconnect thread into " +
+                            "scheduledPool" + "already");
         }
     }
 
     private void doReconnect() {
         ReConnectRunner reconnectRunner = ReConnectRunner.create(buildNettyHolder(), buildExecuteHolder(),
                 haChannelGroup);
-        Future<?> future = null;
-        future = reconnectPool.scheduleWithFixedDelay(reconnectRunner, 1, 3, TimeUnit.SECONDS);
-        final boolean offer = futureQueue.offer(future);
-        if (!offer) {
-            log.error("occur unkonw error, future offer queue must be return 'true'");
+        final Future<?> f = reconnectPool.scheduleWithFixedDelay(reconnectRunner, 3, 3, TimeUnit.SECONDS);
+        if (!future.offer(f)) {
+            log.error("occur some error, future queue in reconnect runner may not clean after reconnect");
         }
     }
 
@@ -115,7 +112,7 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
     }
 
     private ExecuteHolder buildExecuteHolder() {
-        return ExecuteHolder.create(reconnectPool, futureQueue);
+        return ExecuteHolder.create(reconnectPool, future);
     }
 
     @Override
@@ -132,6 +129,16 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
 
     public void turnOnReconnect() {
         reconnect.set(true);
+    }
+
+    public void destory() {
+        turnOffReconnect();
+        Future<?> f = future.poll();
+        for (; null != f; ) {
+            f.cancel(true);
+            f = future.poll();
+        }
+        reconnectPool.shutdown();
     }
 
 }

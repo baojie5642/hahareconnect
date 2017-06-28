@@ -9,11 +9,7 @@ import java.util.concurrent.TimeUnit;
  * throughput statistics via {@link Meter}.
  */
 public class HahaTimer implements Metered, Sampling {
-    /**
-     * A timing context.
-     *
-     * @see Timer#time()
-     */
+
     public static class Context implements Closeable {
         private final HahaTimer timer;
         private final Clock clock;
@@ -28,6 +24,7 @@ public class HahaTimer implements Metered, Sampling {
         /**
          * Updates the timer with the difference between current and start time. Call to this method will
          * not reset the start time. Multiple calls result in multiple updates.
+         *
          * @return the elapsed time in nanoseconds
          */
         public long stop() {
@@ -36,7 +33,9 @@ public class HahaTimer implements Metered, Sampling {
             return elapsed;
         }
 
-        /** Equivalent to calling {@link #stop()}. */
+        /**
+         * Equivalent to calling {@link #stop()}.
+         */
         @Override
         public void close() {
             stop();
@@ -47,29 +46,17 @@ public class HahaTimer implements Metered, Sampling {
     private final Histogram histogram;
     private final Clock clock;
 
-    /**
-     * Creates a new {@link Timer} using an {@link ExponentiallyDecayingReservoir} and the default
-     * {@link Clock}.
-     */
+
     public HahaTimer() {
         this(new ExponentiallyDecayingReservoir());
     }
 
-    /**
-     * Creates a new {@link Timer} that uses the given {@link Reservoir}.
-     *
-     * @param reservoir the {@link Reservoir} implementation the timer should use
-     */
+
     public HahaTimer(Reservoir reservoir) {
         this(reservoir, Clock.defaultClock());
     }
 
-    /**
-     * Creates a new {@link Timer} that uses the given {@link Reservoir} and {@link Clock}.
-     *
-     * @param reservoir the {@link Reservoir} implementation the timer should use
-     * @param clock  the {@link Clock} implementation the timer should use
-     */
+
     public HahaTimer(Reservoir reservoir, Clock clock) {
         this.meter = new Meter(clock);
         this.clock = clock;

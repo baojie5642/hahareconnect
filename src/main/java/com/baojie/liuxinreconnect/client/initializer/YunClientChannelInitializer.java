@@ -19,20 +19,20 @@ public class YunClientChannelInitializer extends ChannelInitializer<SocketChanne
     private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap;
     private final ReConnectHandler reConnectHandler;
 
-    public static YunClientChannelInitializer cerate(final ReConnectHandler connectionWatchdog,
+    public static YunClientChannelInitializer cerate(final ReConnectHandler reConnectHandler,
             final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap) {
-        return new YunClientChannelInitializer(connectionWatchdog, messageFutureMap);
+        return new YunClientChannelInitializer(reConnectHandler,messageFutureMap);
     }
 
     private YunClientChannelInitializer(final ReConnectHandler reConnectHandler,
             final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> messageFutureMap) {
-        this.reConnectHandler = reConnectHandler;
+        this.reConnectHandler=reConnectHandler;
         this.messageFutureMap = messageFutureMap;
     }
 
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
-        ch.pipeline().addLast(reConnectHandler);
+        ch.pipeline().addLast("reConnectHandler",reConnectHandler);
         ch.pipeline().addLast("frameEncoder", new LengthFieldPrepender(4));
         ch.pipeline().addLast("encoder", new ByteArrayEncoder());
         ch.pipeline().addLast("frameDecoder", new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));

@@ -56,7 +56,7 @@ public class MessageSendRunner implements Runnable {
 		channel = getChannelFromGroup(haChannelGroupInner);
 		if (null == channel) {
 			log.error("初次获取channel为null，channelgroup的初始化可能初始化出现问题，请检查！！！");
-			throw new NullPointerException();
+			//throw new NullPointerException();
 		}
 		retry0: while (true) {
 			if (channesHasBroken()) {

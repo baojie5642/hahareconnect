@@ -19,7 +19,7 @@ import static java.nio.file.StandardWatchEventKinds.*;
 /**
  * Created by baojie on 17-6-26.
  */
-public class DirectoryWatcher extends Observable{
+public class DirectoryWatcher extends Observable {
 
     private WatchService watcher;
     private Path path;
@@ -27,10 +27,12 @@ public class DirectoryWatcher extends Observable{
     private Executor executor = Executors.newSingleThreadExecutor();
 
     FutureTask<Integer> task = new FutureTask<Integer>(
-            new Callable<Integer>(){
-                public Integer call() throws InterruptedException{
+            new Callable<Integer>() {
+                public Integer call() throws InterruptedException {
                     processEvents();
-                    return Integer.valueOf(0);}});
+                    return Integer.valueOf(0);
+                }
+            });
 
     @SuppressWarnings("unchecked")
     static <T> WatchEvent<T> cast(WatchEvent<?> event) {
@@ -47,13 +49,14 @@ public class DirectoryWatcher extends Observable{
     /**
      * 启动监控过程
      */
-    public void execute(){
+    public void execute() {
         // 通过线程池启动一个额外的线程加载Watching过程
         executor.execute(task);
     }
 
     /**
      * 关闭后的对象无法重新启动
+     *
      * @throws IOException
      */
     public void shutdown() throws IOException {
@@ -95,7 +98,7 @@ public class DirectoryWatcher extends Observable{
     /**
      * 通知外部各个Observer目录有新的事件更新
      */
-    void notifiy(String fileName, Kind<?> kind){
+    void notifiy(String fileName, Kind<?> kind) {
         // 标注目录已经被做了更改
         setChanged();
         //     主动通知各个观察者目标对象状态的变更

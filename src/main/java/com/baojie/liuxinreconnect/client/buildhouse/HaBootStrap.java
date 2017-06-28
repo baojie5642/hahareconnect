@@ -11,11 +11,10 @@ import com.baojie.liuxinreconnect.client.initializer.YunClientChannelInitializer
 import com.baojie.liuxinreconnect.client.watchdog.HostAndPort;
 import com.baojie.liuxinreconnect.client.watchdog.ReConnectHandler;
 import com.baojie.liuxinreconnect.message.MessageResponse;
+import com.baojie.liuxinreconnect.util.CheckNull;
 import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
@@ -23,15 +22,18 @@ import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HaBootStrap {
-
-    private final AtomicReference<ReConnectHandler> watchHandlerCache = new AtomicReference<ReConnectHandler>(null);
+    private static final Logger log = LoggerFactory.getLogger(HaBootStrap.class);
+    private final AtomicReference<ReConnectHandler> watchCache = new AtomicReference<ReConnectHandler>(null);
     public static final int DEFULT_THREAD_NUM = Runtime.getRuntime().availableProcessors() * 2;
     private final AtomicBoolean haDestory = new AtomicBoolean(false);
     private final AtomicBoolean hasInit = new AtomicBoolean(false);
     private volatile EventLoopGroup eventLoopGroup;
-    private static final int MICRO_SECOND = 3;
+    private static final int Micro_Second = 3;
+    private static final int Hold_Times = 60 * 20000000;
     private final HostAndPort hostAndPort;
     private volatile Bootstrap bootstrap;
     private final int workThread;
@@ -49,13 +51,13 @@ public class HaBootStrap {
         return new HaBootStrap(hostAndPort, DEFULT_THREAD_NUM);
     }
 
-    public ReConnectHandler init(final HaChannelGroup haChannelGroup,
-            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap) {
+    public ReConnectHandler init(final HaChannelGroup group,
+            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futures) {
         if (hasInit.get()) {
             return getInLoop();
         } else {
             if (hasInit.compareAndSet(false, true)) {
-                realInit(haChannelGroup, futureMap);
+                realInit(group, futures);
                 return getInLoop();
             } else {
                 return getInLoop();
@@ -64,50 +66,53 @@ public class HaBootStrap {
     }
 
     private ReConnectHandler getInLoop() {
-        ReConnectHandler reConnectHandler = watchHandlerCache.get();
-        if (null != reConnectHandler) {
-            return reConnectHandler;
+        ReConnectHandler reConnect = watchCache.get();
+        if (null != reConnect) {
+            return reConnect;
         } else {
-            retry:
+            int hold = 0;
+            retry0:
             for (; ; ) {
-                reConnectHandler = watchHandlerCache.get();
-                if (null == reConnectHandler) {
+                reConnect = watchCache.get();
+                if (null == reConnect) {
                     holdMicroSec();
+                    if (hold == Hold_Times) {
+                        break retry0;
+                    } else {
+                        hold++;
+                    }
                 } else {
-                    break retry;
+                    break retry0;
                 }
             }
-            if (null == reConnectHandler) {
-                throw new NullPointerException();
+            if (hold == Hold_Times) {
+                log.warn("may occur some error");
             }
-            return reConnectHandler;
+            CheckNull.checkNull(reConnect, "'ReConnectHandler' must not be null");
+            return reConnect;
         }
     }
 
     private void holdMicroSec() {
         Thread.yield();
-        LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(MICRO_SECOND, TimeUnit.MICROSECONDS));
+        LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(Micro_Second, TimeUnit.MICROSECONDS));
         Thread.yield();
     }
 
     private void realInit(final HaChannelGroup haChannelGroup,
-            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap) {
-        if (null == haChannelGroup) {
-            throw new NullPointerException();
-        }
-        if (null == futureMap) {
-            throw new NullPointerException();
-        }
+            final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futures) {
+        CheckNull.checkNull(haChannelGroup, "haChannelGroup");
+        CheckNull.checkNull(futures, "futures");
         initBoot();
-        initEvevt();
-        bootGroup(haChannelGroup, futureMap);
+        initEvent();
+        bootGroup(haChannelGroup, futures);
     }
 
     private void initBoot() {
         bootstrap = YunBuilder.buildBootstrap(bootstrap);
     }
 
-    private void initEvevt() {
+    private void initEvent() {
         eventLoopGroup = YunBuilder.buildEventLoopGroup(eventLoopGroup, workThread);
     }
 
@@ -115,7 +120,7 @@ public class HaBootStrap {
             final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap) {
         bootstrap.group(eventLoopGroup);
         final ReConnectHandler reConnectHandler = makeWatchHandler(haChannelGroup);
-        watchHandlerCache.set(reConnectHandler);
+        watchCache.set(reConnectHandler);
         doBoot(reConnectHandler, futureMap);
     }
 
@@ -138,41 +143,13 @@ public class HaBootStrap {
     private void handlerBoot(final ReConnectHandler reConnectHandler,
             final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap) {
         bootstrap.handler(new LoggingHandler(LogLevel.DEBUG));
-        bootstrap.handler(YunClientChannelInitializer.cerate(reConnectHandler, futureMap));
+        bootstrap.handler(YunClientChannelInitializer.cerate(reConnectHandler,futureMap));
     }
 
     private void optionBoot() {
         bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
         bootstrap.option(ChannelOption.TCP_NODELAY, true);
         bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
-    }
-
-    public Channel getOneChannel() {
-        return realGet();
-    }
-
-    private Channel realGet() {
-        final ChannelFuture channelFuture = getChannelFuture();
-        return getChannel(channelFuture);
-    }
-
-    private ChannelFuture getChannelFuture() {
-        final ChannelFuture channelFuture = bootstrap.connect(hostAndPort.getHost(), hostAndPort.getPort());
-        try {
-            channelFuture.awaitUninterruptibly();
-        } catch (Throwable throwable) {
-            throwable.printStackTrace();
-        }
-        return channelFuture;
-    }
-
-    private Channel getChannel(final ChannelFuture channelFuture) {
-        final Channel channel = channelFuture.channel();
-        if (null == channel) {
-            throw new NullPointerException();
-        } else {
-            return channel;
-        }
     }
 
     public HostAndPort getHostAndPort() {
@@ -183,12 +160,20 @@ public class HaBootStrap {
         return workThread;
     }
 
+    public Bootstrap getBootstrap() {
+        return bootstrap;
+    }
+
     public void destory() {
         if (haDestory.get()) {
             return;
         } else {
             if (haDestory.compareAndSet(false, true)) {
-                watchHandlerCache.set(null);
+                ReConnectHandler reConnectHandler = watchCache.get();
+                if (null != reConnectHandler) {
+                    reConnectHandler.destory();
+                }
+                watchCache.set(null);
                 if (null != eventLoopGroup) {
                     eventLoopGroup.shutdownGracefully();
                     eventLoopGroup = null;
@@ -199,6 +184,18 @@ public class HaBootStrap {
             } else {
                 return;
             }
+        }
+    }
+
+    public boolean isCompleteInit() {
+        if (hasInit.get()) {
+            if (null != watchCache.get()) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
         }
     }
 

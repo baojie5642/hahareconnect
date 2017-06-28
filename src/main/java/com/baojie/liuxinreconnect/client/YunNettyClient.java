@@ -1,19 +1,19 @@
 package com.baojie.liuxinreconnect.client;
 
+import com.baojie.liuxinreconnect.client.buildhouse.ChannelBuilder;
+import com.baojie.liuxinreconnect.client.watchdog.HaInitReconnect;
 import com.baojie.liuxinreconnect.util.threadall.HaThreadFactory;
+import com.baojie.liuxinreconnect.util.threadall.pool.HaScheduledPool;
 import io.netty.channel.Channel;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
 
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,158 +38,212 @@ public class YunNettyClient {
     private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> futureQueue = new ConcurrentLinkedQueue<>();
     private final HaThreadPool sendThreadPool = new HaThreadPool(256, 1024, 180, TimeUnit.SECONDS,
             new SynchronousQueue<>(), HaThreadFactory.create("SendMessageRunner"));
+    private final HaScheduledPool initReconPool = new HaScheduledPool(1,
+            HaThreadFactory.create("client_init_reconnect"));
+    private final LinkedBlockingQueue<Future<?>> initFuture = new LinkedBlockingQueue<>(1);
+    private final AtomicReference<HaInitReconnect> haInitReconnect = new AtomicReference<>(null);
+    private volatile HaInitReconnect instance;
+
     private static final Logger log = LoggerFactory.getLogger(YunNettyClient.class);
     private final AtomicBoolean hasConnect = new AtomicBoolean(false);
     private final AtomicBoolean hasClosed = new AtomicBoolean(false);
     private final ThreadLocalRandom random = ThreadLocalRandom.current();
     private final HaChannelGroup haChannelGroup;
+    private final boolean reconWhenInitFail = true;
     private volatile ReConnectHandler reConnectHandler;
-    private final HaBootStrap yunBootStrap;
+    private final HaBootStrap haBootStrap;
     private final HostAndPort hostAndPort;
     private final int howManyChannel;
     private final int threadNum;
 
-    private YunNettyClient(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum)
-    {
+    private YunNettyClient(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
         this.howManyChannel = howManyChannel;
         this.hostAndPort = hostAndPort;
         this.threadNum = threadNum;
         this.haChannelGroup = HaChannelGroup.create();
-        this.yunBootStrap = HaBootStrap.create(hostAndPort, threadNum);
+        this.haBootStrap = HaBootStrap.create(hostAndPort, threadNum);
     }
 
-    private YunNettyClient(final HostAndPort hostAndPort)
-    {
-        this.hostAndPort = hostAndPort;
-        this.howManyChannel = HaChannelGroup.Init;
-        this.threadNum = HaBootStrap.DEFULT_THREAD_NUM;
-        this.haChannelGroup = HaChannelGroup.create();
-        this.yunBootStrap = HaBootStrap.create(hostAndPort);
-    }
-
-    public static YunNettyClient create(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum)
-    {
+    public static YunNettyClient create(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
         return new YunNettyClient(hostAndPort, howManyChannel, threadNum);
     }
 
-    public static YunNettyClient create(final HostAndPort hostAndPort)
-    {
-        return new YunNettyClient(hostAndPort);
+    public static YunNettyClient create(final HostAndPort hostAndPort) {
+        return new YunNettyClient(hostAndPort, HaChannelGroup.Init, HaBootStrap.DEFULT_THREAD_NUM);
     }
 
-    public void init()
-    {
+    public void init() {
         final boolean connect = hasConnect.get();
-        if (connect)
-        {
+        if (connect) {
             return;
-        } else
-        {
-            if (hasConnect.compareAndSet(false, true))
-            {
+        } else {
+            if (hasConnect.compareAndSet(false, true)) {
                 innerInit();
-            } else
-            {
+            } else {
                 log.info("other thread has execute connect already");
             }
         }
     }
 
-    private void innerInit()
-    {
+    private void innerInit() {
         initBootAndHandler();
-        initChannelGroup();
-        openState();
-    }
-
-    private void initBootAndHandler()
-    {
-        if (null != reConnectHandler)
-        {
-            throw new NullPointerException();
-        } else
-        {
-            reConnectHandler = yunBootStrap.init(haChannelGroup, futureMap);
-        }
-    }
-
-    private void initChannelGroup()
-    {
-        Channel channel = null;
-        for (int i = 0; i < howManyChannel; i++)
-        {
-            channel = yunBootStrap.getOneChannel();
-            if (null == channel)
-            {
-                throw new NullPointerException();
-            } else
-            {
-                haChannelGroup.addOneChannel(channel);
+        if (initChannelGroup()) {
+            openState();
+        } else {
+            if (reconWhenInitFail) {
+                haChannelGroup.clean();
+                HaInitReconnect h = haInitReconnect.get();
+                if (null == h) {
+                    h = getInitRecInstance();
+                    if (haInitReconnect.compareAndSet(null, h)) {
+                        Future<?>future=initReconPool.scheduleWithFixedDelay(h, 3, 3, TimeUnit.SECONDS);
+                        if(null!=future){
+                            if(!initFuture.offer(future)){
+                                log.error("init reconnect future offer queue occur some error");
+                            }
+                        }
+                    }
+                }
+            } else {
+                closeClient();
             }
         }
     }
 
-    private void openState()
-    {
+    private HaInitReconnect getInitRecInstance() {
+        if (instance != null) {
+            return instance;
+        } else {
+            synchronized (YunNettyClient.class) {
+                if (null == instance) {
+                    instance = new HaInitReconnect();
+                }
+                return instance;
+            }
+        }
+    }
+
+    private void initBootAndHandler() {
+        if (null != reConnectHandler) {
+            throw new IllegalStateException();
+        } else {
+            reConnectHandler = haBootStrap.init(haChannelGroup, futureMap);
+        }
+    }
+
+    private boolean initChannelGroup() {
+        Channel channel = null;
+        ChannelFuture channelFuture = null;
+        for (int i = 0; i < howManyChannel; i++) {
+            channelFuture = ChannelBuilder.getChannelFuture(haBootStrap);
+            channel = channelFuture.channel();
+            if (channelFuture.isDone() && channelFuture.isSuccess()) {
+                if (null == channel) {
+                    throw new NullPointerException();
+                } else {
+                    haChannelGroup.addOneChannel(channel);
+                }
+            } else {
+                cleanChannelResource(channel);
+                for(int j=1;;j++){
+                    channel=haChannelGroup.getOneChannel(j);
+                    if(null==channel){
+                        break;
+                    }
+                    cleanChannelResource(channel);
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void cleanChannelResource(final Channel channel) {
+        if (null != channel) {
+            if (channel.isRegistered()) {
+                channel.deregister();
+                channel.disconnect();
+                channel.close();
+            }
+            if(channel.isActive()){
+                channel.disconnect();
+                channel.close();
+            }
+            if(channel.isOpen()){
+                channel.disconnect();
+                channel.close();
+            }
+            channel.disconnect();
+            channel.close();
+        }
+    }
+
+    private void openState() {
         reConnectHandler.turnOnReconnect();
         haChannelGroup.setActive();
     }
 
+    private final class HaInitReconnect implements Runnable {
 
-    public int getThreadNum()
-    {
-        return threadNum;
-    }
+        public HaInitReconnect() {
 
-    public void turnOffWatchHandler()
-    {
-        if (null != reConnectHandler)
-        {
-            reConnectHandler.turnOffReconnect();
         }
-    }
 
-    public HostAndPort getHostAndPort()
-    {
-        return hostAndPort;
-    }
+        @Override
+        public void run() {
+            log.info("haClient init failure, reconnecting……");
+            haChannelGroup.clean();
+            if (initChannelGroup()) {
+                shutDownMe();
+                Channel channel = haChannelGroup.getOneChannel(1);
+                if (null != channel) {
+                    channel.pipeline().addFirst(reConnectHandler);
+                }
+                openState();
+            } else {
 
-    public int getHowManyChannel()
-    {
-        return howManyChannel;
+            }
+        }
+
+        private void shutDownMe(){
+            Future<?> future = initFuture.poll();
+            for (; null != future; ) {
+                future.cancel(true);
+                future = initFuture.poll();
+            }
+            initReconPool.purge();
+            HaInitReconnect h = haInitReconnect.get();
+            if (null != h) {
+                initReconPool.remove(h);
+            }
+        }
+
     }
 
     public MessageResponse sendMessage(final MessageRequest messageRequest, final int timeOut, final TimeUnit timeUnit)
-            throws Exception
-    {
-
-        if (!haChannelGroup.getState())
-        {
+            throws Exception {
+        if (!haChannelGroup.getState()) {
             log.error("发送消息时检测到channelGroup状态为不可用，直接抛出异常，请选择其他IP Client。");
             throw new ChannelGroupCanNotUseException("ChannelGroup can not use,Please change other IP client.");
         }
         final byte[] bytesToSend = SerializationUtil.serialize(messageRequest);
         final String messageid = messageRequest.getMsgId();
-        CheckNull.checkStringEmpty(messageid);
+        CheckNull.checkStringNull(messageid, "messageid");
         final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = makeFuture();
         futureMap.putIfAbsent(messageid, unitedCloudFutureReturnObject);
         return realSend(bytesToSend, messageid, unitedCloudFutureReturnObject, timeOut, timeUnit);
-
     }
 
     private MessageResponse realSend(final byte[] bytesToSend, final String messageid,
-                                     final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject, final int
-                                             timeOut,
-                                     final TimeUnit timeUnit) throws Exception
-    {
+            final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject, final int
+            timeOut,
+            final TimeUnit timeUnit) throws Exception {
         MessageResponse messageResponse = null;
         final Channel channel = haChannelGroup.getOneChannel(random.nextInt(howManyChannel));
         channel.writeAndFlush(bytesToSend, channel.voidPromise());
-        try
-        {
+        try {
             messageResponse = unitedCloudFutureReturnObject.get(timeOut, timeUnit);
-        } catch (Exception e)
-        {
+        } catch (Exception e) {
             handleFutureMapQueue(messageid, unitedCloudFutureReturnObject);
             handleMessageReponseAndChannel(messageResponse, e);
         }
@@ -198,191 +252,150 @@ public class YunNettyClient {
     }
 
     @SuppressWarnings({"unchecked"})
-    private RecycleFuture<MessageResponse> makeFuture()
-    {
+    private RecycleFuture<MessageResponse> makeFuture() {
         RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue();
-        if (null == unitedCloudFutureReturnObject)
-        {
+        if (null == unitedCloudFutureReturnObject) {
             unitedCloudFutureReturnObject = RecycleFuture.createUnitedCloudFuture(MessageResponse.class);
         }
         return unitedCloudFutureReturnObject;
     }
 
-    private RecycleFuture<MessageResponse> getFutureFromQueue()
-    {
+    private RecycleFuture<MessageResponse> getFutureFromQueue() {
         RecycleFuture<MessageResponse> recycleFuture = null;
-        try
-        {
+        try {
             recycleFuture = futureQueue.poll();
-        } catch (Throwable throwable)
-        {
+        } catch (Throwable throwable) {
             assert true;// ignore
         }
         return recycleFuture;
     }
 
     private void handleFutureMapQueue(final String messageid,
-                                      final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject)
-    {
-        removeFurureFromMap(messageid);
+            final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
+        removeFutureFromMap(messageid);
         resetFuture(unitedCloudFutureReturnObject);
         putFutureIntoQueue(unitedCloudFutureReturnObject);
     }
 
-    private void removeFurureFromMap(final String messageid)
-    {
-        try
-        {
+    private void removeFutureFromMap(final String messageid) {
+        try {
             futureMap.remove(messageid);
-        } catch (Throwable throwable)
-        {
+        } catch (Throwable throwable) {
             log.debug("消息future可能已经从map中删除。");
         }
     }
 
-    private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject)
-    {
+    private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
         unitedCloudFutureReturnObject.reset();
     }
 
-    private boolean putFutureIntoQueue(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject)
-    {
+    private boolean putFutureIntoQueue(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
         return futureQueue.offer(unitedCloudFutureReturnObject);
     }
 
     private void handleMessageReponseAndChannel(MessageResponse messageResponse, final Exception exception)
-            throws Exception
-    {
+            throws Exception {
         messageResponse = null;
         dealWithException(exception);
     }
 
-    private void dealWithException(final Exception exception) throws Exception
-    {
-        if (exception instanceof InterruptedException)
-        {
+    private void dealWithException(final Exception exception) throws Exception {
+        if (exception instanceof InterruptedException) {
             exception.printStackTrace();
             log.info("消息发送失败，出现InterruptedException异常。");
             throw exception;
-        } else if (exception instanceof ExecutionException)
-        {
-            exception.printStackTrace();
-            log.info("消息发送失败，出现ExecutionException异常。");
-            throw exception;
-        } else if (exception instanceof TimeoutException)
-        {
-            exception.printStackTrace();
-            log.info("消息发送失败，出现TimeoutException异常。");
-            throw exception;
-        } else
-        {
-            exception.printStackTrace();
-            log.info("消息发送失败，出现的是Exception异常。");
-            throw exception;
+        } else {
+            if (exception instanceof ExecutionException) {
+                exception.printStackTrace();
+                log.info("消息发送失败，出现ExecutionException异常。");
+                throw exception;
+            } else {
+                if (exception instanceof TimeoutException) {
+                    exception.printStackTrace();
+                    log.info("消息发送失败，出现TimeoutException异常。");
+                    throw exception;
+                } else {
+                    exception.printStackTrace();
+                    log.info("消息发送失败，出现的是Exception异常。");
+                    throw exception;
+                }
+            }
         }
     }
 
-    public boolean closeClient()
-    {
-        boolean closeSuccess = false;
-
-        if (hasClosed.get())
-        {
-            log.info("nettyclient已经关闭。");
+    public boolean closeClient() {
+        boolean closeSuccess = true;
+        if (hasClosed.get()) {
+            log.info("ha client has been closed");
             closeSuccess = false;
-        } else
-        {
-            if (hasClosed.compareAndSet(false, true))
-            {
+        } else {
+            if (hasClosed.compareAndSet(false, true)) {
                 setCloseState();
-                closeChannel();
-                haChannelGroup.clean();
-                shutNettyClient();
-                hasClosed.set(false);
-                log.info("nettyclient客户端已经关闭。");
+                log.info("ha client has been closed");
                 closeSuccess = true;
-            } else
-            {
-                log.info("nettyclient已经关闭。");
+            } else {
+                log.info("ha client is close by other thread");
                 closeSuccess = false;
             }
         }
-
         return closeSuccess;
     }
 
-    private void setCloseState()
-    {
-        reConnectHandler.turnOffReconnect();
-        haChannelGroup.setInactive();
-
+    private void setCloseState() {
+        if (null != reConnectHandler) {
+            reConnectHandler.turnOffReconnect();
+            reConnectHandler.destory();
+        }
+        if (null != haChannelGroup) {
+            haChannelGroup.setInactive();
+            haChannelGroup.clean();
+        }
+        if (null != haBootStrap) {
+            haBootStrap.destory();
+        }
     }
 
-    private void closeChannel()
-    {
-        haChannelGroup.clean();
-    }
-
-    private void shutNettyClient()
-    {
-
-    }
-
-    public void startSend()
-    {
+    public void startSend() {
         MessageSendRunner messageSendRunner = null;
-        for (int i = 1; i <=howManyChannel; i++)
-        {
+        for (int i = 1; i <= howManyChannel; i++) {
             messageSendRunner = MessageSendRunner.create(futureMap, haChannelGroup, i);
             sendThreadPool.submit(messageSendRunner);
         }
     }
 
-    public HaChannelGroup getHaChannelGroup()
-    {
+    public HaChannelGroup getHaChannelGroup() {
         return haChannelGroup;
     }
 
-    public ConcurrentHashMap<String, RecycleFuture<MessageResponse>> getMessageFutureMap()
-    {
+    public ConcurrentHashMap<String, RecycleFuture<MessageResponse>> getMessageFutureMap() {
         return futureMap;
     }
 
-    public static void main(String[] args)
-    {
+    public static void main(String[] args) {
         int port = 8080;
-        if (args != null && args.length > 0)
-        {
-            try
-            {
+        if (args != null && args.length > 0) {
+            try {
                 port = Integer.valueOf(args[0]);
-            } catch (NumberFormatException e)
-            {
+            } catch (NumberFormatException e) {
             }
         }
         HostAndPort hostAndPort = HostAndPort.create("192.168.1.187", port);
 
         YunNettyClient heartBeatsClient = YunNettyClient.create(hostAndPort, 128, 64);
-        try
-        {
+        try {
             heartBeatsClient.init();
-        } catch (Exception e)
-        {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        try
-        {
-            TimeUnit.SECONDS.sleep(10);
-        } catch (InterruptedException e)
-        {
+        try {
+            TimeUnit.SECONDS.sleep(6);
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
         heartBeatsClient.startSend();
-        try
-        {
+        try {
             TimeUnit.SECONDS.sleep(3);
-        } catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
