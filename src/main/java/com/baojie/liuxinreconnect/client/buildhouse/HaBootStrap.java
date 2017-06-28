@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 public class HaBootStrap {
     private static final Logger log = LoggerFactory.getLogger(HaBootStrap.class);
     private final AtomicReference<ReConnectHandler> watchCache = new AtomicReference<ReConnectHandler>(null);
-    public static final int DEFULT_THREAD_NUM = Runtime.getRuntime().availableProcessors() * 2;
+    public static final int Defult_Thread_Num = Runtime.getRuntime().availableProcessors() * 2;
     private final AtomicBoolean haDestory = new AtomicBoolean(false);
     private final AtomicBoolean hasInit = new AtomicBoolean(false);
     private volatile EventLoopGroup eventLoopGroup;
@@ -48,7 +48,7 @@ public class HaBootStrap {
     }
 
     public static HaBootStrap create(final HostAndPort hostAndPort) {
-        return new HaBootStrap(hostAndPort, DEFULT_THREAD_NUM);
+        return new HaBootStrap(hostAndPort, Defult_Thread_Num);
     }
 
     public ReConnectHandler init(final HaChannelGroup group,
@@ -143,7 +143,7 @@ public class HaBootStrap {
     private void handlerBoot(final ReConnectHandler reConnectHandler,
             final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap) {
         bootstrap.handler(new LoggingHandler(LogLevel.DEBUG));
-        bootstrap.handler(YunClientChannelInitializer.cerate(reConnectHandler,futureMap));
+        bootstrap.handler(YunClientChannelInitializer.cerate(reConnectHandler, futureMap));
     }
 
     private void optionBoot() {

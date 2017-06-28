@@ -16,17 +16,17 @@ import com.baojie.liuxinreconnect.message.MessageRequest;
 import com.baojie.liuxinreconnect.message.MessageResponse;
 import com.baojie.liuxinreconnect.util.CheckNull;
 
-public class YunNettyClientManager {
+public class HaNettyClientManager {
 
 	private static final String IP_Port_Split = "[,|]";
 
 	private static final String Port_Split = ":";
 
-	private static Logger log = LoggerFactory.getLogger(YunNettyClientManager.class);
+	private static Logger log = LoggerFactory.getLogger(HaNettyClientManager.class);
 
 	private final ThreadLocalRandom random = ThreadLocalRandom.current();
 
-	private final ConcurrentHashMap<Integer, YunNettyClient> mapForClient = new ConcurrentHashMap<Integer, YunNettyClient>(
+	private final ConcurrentHashMap<Integer, HaNettyClient> mapForClient = new ConcurrentHashMap<Integer, HaNettyClient>(
 			32);
 
 	// 最多允许32个ip地址的主机
@@ -70,7 +70,7 @@ public class YunNettyClientManager {
 	}
 
 	private void buildClient(final int channelNumInOneClient, final int clientNum, final HostAndPort hostAndPort) {
-		YunNettyClient heartBeatsClient = YunNettyClient.create(hostAndPort,channelNumInOneClient, channelNumInOneClient);
+		HaNettyClient heartBeatsClient = HaNettyClient.create(hostAndPort,channelNumInOneClient, channelNumInOneClient);
 		heartBeatsClient.init();
 		mapForClient.putIfAbsent(clientNum, heartBeatsClient);
 	}
@@ -80,13 +80,13 @@ public class YunNettyClientManager {
 		int hasRetryTimes = 0;
 		int whichClient = -99;
 		MessageResponse messageResponse = null;
-		YunNettyClient yunNettyClient=null;
+		HaNettyClient haNettyClient =null;
 		while (hasRetryTimes <= retryTimes) {
 			whichClient = getRetryClientNum(whichClient);
-			yunNettyClient = mapForClient.get(whichClient);
-			CheckNull.checkNull(yunNettyClient,"yunNettyClient");
+			haNettyClient = mapForClient.get(whichClient);
+			CheckNull.checkNull(haNettyClient,"haNettyClient");
 			try {
-				messageResponse = yunNettyClient.sendMessage(messageRequest, timeOut, timeUnit);
+				messageResponse = haNettyClient.sendMessage(messageRequest, timeOut, timeUnit);
 				return messageResponse;
 			} catch (Exception e) {
 				hasRetryTimes++;

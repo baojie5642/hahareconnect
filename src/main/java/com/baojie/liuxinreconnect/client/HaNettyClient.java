@@ -1,22 +1,15 @@
 package com.baojie.liuxinreconnect.client;
 
 import com.baojie.liuxinreconnect.client.buildhouse.ChannelBuilder;
-import com.baojie.liuxinreconnect.client.watchdog.HaInitReconnect;
 import com.baojie.liuxinreconnect.util.threadall.HaThreadFactory;
 import com.baojie.liuxinreconnect.util.threadall.pool.HaScheduledPool;
 import io.netty.channel.Channel;
-
-import java.util.List;
 import java.util.concurrent.*;
-
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.baojie.liuxinreconnect.client.buildhouse.HaBootStrap;
 import com.baojie.liuxinreconnect.client.channelgroup.HaChannelGroup;
 import com.baojie.liuxinreconnect.client.sendrunner.MessageSendRunner;
@@ -30,33 +23,32 @@ import com.baojie.liuxinreconnect.util.future.RecycleFuture;
 import com.baojie.liuxinreconnect.util.threadall.pool.HaThreadPool;
 import com.baojie.liuxinreconnect.yunexception.channelgroup.ChannelGroupCanNotUseException;
 
-public class YunNettyClient {
+public class HaNettyClient {
 
     private final ConcurrentHashMap<String, RecycleFuture<MessageResponse>> futureMap = new ConcurrentHashMap<String,
             RecycleFuture<MessageResponse>>(
             8192);
     private final ConcurrentLinkedQueue<RecycleFuture<MessageResponse>> futureQueue = new ConcurrentLinkedQueue<>();
-    private final HaThreadPool sendThreadPool = new HaThreadPool(256, 1024, 180, TimeUnit.SECONDS,
+    private final HaThreadPool sendThreadPool = new HaThreadPool(64, 1024, 180, TimeUnit.SECONDS,
             new SynchronousQueue<>(), HaThreadFactory.create("SendMessageRunner"));
     private final HaScheduledPool initReconPool = new HaScheduledPool(1,
             HaThreadFactory.create("client_init_reconnect"));
-    private final LinkedBlockingQueue<Future<?>> initFuture = new LinkedBlockingQueue<>(1);
     private final AtomicReference<HaInitReconnect> haInitReconnect = new AtomicReference<>(null);
-    private volatile HaInitReconnect instance;
-
-    private static final Logger log = LoggerFactory.getLogger(YunNettyClient.class);
+    private final LinkedBlockingQueue<Future<?>> initFuture = new LinkedBlockingQueue<>(1);
+    private static final Logger log = LoggerFactory.getLogger(HaNettyClient.class);
     private final AtomicBoolean hasConnect = new AtomicBoolean(false);
     private final AtomicBoolean hasClosed = new AtomicBoolean(false);
     private final ThreadLocalRandom random = ThreadLocalRandom.current();
-    private final HaChannelGroup haChannelGroup;
-    private final boolean reconWhenInitFail = true;
     private volatile ReConnectHandler reConnectHandler;
+    private volatile boolean reconWhenInitFail = true;
+    private final HaChannelGroup haChannelGroup;
+    private volatile HaInitReconnect instance;
     private final HaBootStrap haBootStrap;
     private final HostAndPort hostAndPort;
     private final int howManyChannel;
     private final int threadNum;
 
-    private YunNettyClient(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
+    private HaNettyClient(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
         this.howManyChannel = howManyChannel;
         this.hostAndPort = hostAndPort;
         this.threadNum = threadNum;
@@ -64,12 +56,12 @@ public class YunNettyClient {
         this.haBootStrap = HaBootStrap.create(hostAndPort, threadNum);
     }
 
-    public static YunNettyClient create(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
-        return new YunNettyClient(hostAndPort, howManyChannel, threadNum);
+    public static HaNettyClient create(final HostAndPort hostAndPort, final int howManyChannel, final int threadNum) {
+        return new HaNettyClient(hostAndPort, howManyChannel, threadNum);
     }
 
-    public static YunNettyClient create(final HostAndPort hostAndPort) {
-        return new YunNettyClient(hostAndPort, HaChannelGroup.Init, HaBootStrap.DEFULT_THREAD_NUM);
+    public static HaNettyClient create(final HostAndPort hostAndPort) {
+        return new HaNettyClient(hostAndPort, HaChannelGroup.Init, HaBootStrap.Defult_Thread_Num);
     }
 
     public void init() {
@@ -96,9 +88,9 @@ public class YunNettyClient {
                 if (null == h) {
                     h = getInitRecInstance();
                     if (haInitReconnect.compareAndSet(null, h)) {
-                        Future<?>future=initReconPool.scheduleWithFixedDelay(h, 3, 3, TimeUnit.SECONDS);
-                        if(null!=future){
-                            if(!initFuture.offer(future)){
+                        Future<?> future = initReconPool.scheduleWithFixedDelay(h, 3, 3, TimeUnit.SECONDS);
+                        if (null != future) {
+                            if (!initFuture.offer(future)) {
                                 log.error("init reconnect future offer queue occur some error");
                             }
                         }
@@ -106,19 +98,6 @@ public class YunNettyClient {
                 }
             } else {
                 closeClient();
-            }
-        }
-    }
-
-    private HaInitReconnect getInitRecInstance() {
-        if (instance != null) {
-            return instance;
-        } else {
-            synchronized (YunNettyClient.class) {
-                if (null == instance) {
-                    instance = new HaInitReconnect();
-                }
-                return instance;
             }
         }
     }
@@ -136,7 +115,7 @@ public class YunNettyClient {
         ChannelFuture channelFuture = null;
         for (int i = 0; i < howManyChannel; i++) {
             channelFuture = ChannelBuilder.getChannelFuture(haBootStrap);
-            channel = channelFuture.channel();
+            channel = ChannelBuilder.getChannel(channelFuture);
             if (channelFuture.isDone() && channelFuture.isSuccess()) {
                 if (null == channel) {
                     throw new NullPointerException();
@@ -144,13 +123,13 @@ public class YunNettyClient {
                     haChannelGroup.addOneChannel(channel);
                 }
             } else {
-                cleanChannelResource(channel);
-                for(int j=1;;j++){
-                    channel=haChannelGroup.getOneChannel(j);
-                    if(null==channel){
+                ChannelBuilder.releaseChannel(channel);
+                for (int j = 1; ; j++) {
+                    channel = haChannelGroup.getOneChannel(j);
+                    if (null == channel) {
                         break;
                     }
-                    cleanChannelResource(channel);
+                    ChannelBuilder.releaseChannel(channel);
                 }
                 return false;
             }
@@ -158,23 +137,16 @@ public class YunNettyClient {
         return true;
     }
 
-    private void cleanChannelResource(final Channel channel) {
-        if (null != channel) {
-            if (channel.isRegistered()) {
-                channel.deregister();
-                channel.disconnect();
-                channel.close();
+    private HaInitReconnect getInitRecInstance() {
+        if (instance != null) {
+            return instance;
+        } else {
+            synchronized (HaNettyClient.class) {
+                if (null == instance) {
+                    instance = new HaInitReconnect();
+                }
+                return instance;
             }
-            if(channel.isActive()){
-                channel.disconnect();
-                channel.close();
-            }
-            if(channel.isOpen()){
-                channel.disconnect();
-                channel.close();
-            }
-            channel.disconnect();
-            channel.close();
         }
     }
 
@@ -205,7 +177,7 @@ public class YunNettyClient {
             }
         }
 
-        private void shutDownMe(){
+        private void shutDownMe() {
             Future<?> future = initFuture.poll();
             for (; null != future; ) {
                 future.cancel(true);
@@ -217,7 +189,6 @@ public class YunNettyClient {
                 initReconPool.remove(h);
             }
         }
-
     }
 
     public MessageResponse sendMessage(final MessageRequest messageRequest, final int timeOut, final TimeUnit timeUnit)
@@ -251,7 +222,6 @@ public class YunNettyClient {
         return messageResponse;
     }
 
-    @SuppressWarnings({"unchecked"})
     private RecycleFuture<MessageResponse> makeFuture() {
         RecycleFuture<MessageResponse> unitedCloudFutureReturnObject = getFutureFromQueue();
         if (null == unitedCloudFutureReturnObject) {
@@ -285,12 +255,12 @@ public class YunNettyClient {
         }
     }
 
-    private void resetFuture(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
-        unitedCloudFutureReturnObject.reset();
+    private void resetFuture(final RecycleFuture<MessageResponse> recycleFuture) {
+        recycleFuture.reset();
     }
 
-    private boolean putFutureIntoQueue(final RecycleFuture<MessageResponse> unitedCloudFutureReturnObject) {
-        return futureQueue.offer(unitedCloudFutureReturnObject);
+    private boolean putFutureIntoQueue(final RecycleFuture<MessageResponse> recycleFuture) {
+        return futureQueue.offer(recycleFuture);
     }
 
     private void handleMessageReponseAndChannel(MessageResponse messageResponse, final Exception exception)
@@ -353,6 +323,17 @@ public class YunNettyClient {
         if (null != haBootStrap) {
             haBootStrap.destory();
         }
+        reconWhenInitFail=false;
+        Future<?> future=initFuture.poll();
+        for(;null!=future;){
+            future.cancel(true);
+            future=initFuture.poll();
+        }
+        if(null!=haInitReconnect.get()){
+            initReconPool.remove(haInitReconnect.get());
+            haInitReconnect.set(null);
+        }
+        initReconPool.shutdown();
     }
 
     public void startSend() {
@@ -381,7 +362,7 @@ public class YunNettyClient {
         }
         HostAndPort hostAndPort = HostAndPort.create("192.168.1.187", port);
 
-        YunNettyClient heartBeatsClient = YunNettyClient.create(hostAndPort, 128, 64);
+        HaNettyClient heartBeatsClient = HaNettyClient.create(hostAndPort, 128, 64);
         try {
             heartBeatsClient.init();
         } catch (Exception e) {
