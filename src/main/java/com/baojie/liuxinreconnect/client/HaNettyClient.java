@@ -301,7 +301,7 @@ public class HaNettyClient {
             e.printStackTrace();
         }
         try {
-            TimeUnit.SECONDS.sleep(3);
+            TimeUnit.SECONDS.sleep(6);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
