@@ -54,7 +54,7 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
         final String channelID = getChannelID(ctx);
         log.info("channel_Id:" + channelID + ", channel is close, close time:" + new Date());
         if (!reconnect.get()) {
-            log.info("button of channel reconnect has been trunoff, then return");
+            log.info("button of channel reconnect has been turnoff, then return");
         } else {
             reconnect(channelID);
         }
@@ -138,6 +138,7 @@ public class ReConnectHandler extends ChannelInboundHandlerAdapter {
             f.cancel(true);
             f = future.poll();
         }
+        reconnectPool.purge();
         reconnectPool.shutdown();
     }
 

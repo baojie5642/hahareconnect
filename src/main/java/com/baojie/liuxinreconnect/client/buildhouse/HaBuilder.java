@@ -7,10 +7,10 @@ import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 
-public class YunBuilder {
+public class HaBuilder {
 
-    private YunBuilder() {
-        throw new IllegalArgumentException("YunBuilder can not be init");
+    private HaBuilder() {
+        throw new IllegalArgumentException("HaBuilder can not be init");
     }
 
     public static Bootstrap buildBootstrap(final Bootstrap bootstrap) {
@@ -38,9 +38,10 @@ public class YunBuilder {
         EventLoopGroup eventLoopGroup = null;
         if (Epoll.isAvailable()) {
             eventLoopGroup = new EpollEventLoopGroup(threadNum,
-                    HaThreadFactory.create("haClient", Thread.MAX_PRIORITY));
+                    HaThreadFactory.create("haNettyClient", Thread.MAX_PRIORITY));
         } else {
-            eventLoopGroup = new NioEventLoopGroup(threadNum, HaThreadFactory.create("haClient", Thread.MAX_PRIORITY));
+            eventLoopGroup = new NioEventLoopGroup(threadNum, HaThreadFactory.create("haNettyClient", Thread
+                    .MAX_PRIORITY));
         }
         return eventLoopGroup;
     }

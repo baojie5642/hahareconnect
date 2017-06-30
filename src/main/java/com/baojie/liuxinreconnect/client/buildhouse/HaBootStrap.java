@@ -109,11 +109,11 @@ public class HaBootStrap {
     }
 
     private void initBoot() {
-        bootstrap = YunBuilder.buildBootstrap(bootstrap);
+        bootstrap = HaBuilder.buildBootstrap(bootstrap);
     }
 
     private void initEvent() {
-        eventLoopGroup = YunBuilder.buildEventLoopGroup(eventLoopGroup, workThread);
+        eventLoopGroup = HaBuilder.buildEventLoopGroup(eventLoopGroup, workThread);
     }
 
     private void bootGroup(final HaChannelGroup haChannelGroup,
@@ -154,10 +154,6 @@ public class HaBootStrap {
 
     public HostAndPort getHostAndPort() {
         return hostAndPort;
-    }
-
-    public int getWorkThread() {
-        return workThread;
     }
 
     public Bootstrap getBootstrap() {

@@ -2,6 +2,7 @@ package com.baojie.liuxinreconnect.client.watchdog;
 
 import java.util.concurrent.Future;
 
+import com.baojie.liuxinreconnect.client.buildhouse.ChannelBuilder;
 import com.baojie.liuxinreconnect.util.CheckNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,10 +106,15 @@ public class ReConnectRunner implements Runnable {
     }
 
     private void reconnect(final String threadName) {
+        Channel channel=null;
         ChannelFuture newChannelFuture = getAndWaitForFuture();
+        if(null!=newChannelFuture){
+            channel=newChannelFuture.channel();
+        }
         if (newChannelFuture.isDone() && newChannelFuture.isSuccess()) {
             fillChannelGroup(newChannelFuture, threadName);
         } else {
+            ChannelBuilder.releaseChannel(channel);
             log.info("thread :" + threadName + ", get channelFuture field");
         }
     }

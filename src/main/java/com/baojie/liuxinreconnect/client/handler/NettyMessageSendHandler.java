@@ -43,7 +43,7 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
     @Override
     public void channelRead0(ChannelHandlerContext ctx, byte[] msg) throws Exception {
         if(msg instanceof byte[]){
-        	final byte[] bytesGetFromServer=(byte[])msg;
+        	final byte[] bytesGetFromServer=msg;
         	
         	if(checkLength(bytesGetFromServer)){
         		return;
@@ -53,9 +53,9 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
         		return;
         	}
         	String msgId=messageResponse.getMsgId();
-        	RecycleFuture<MessageResponse> unitedCloudFutureReturnObject=getFutureFromMap(msgId);
-        	if(null!=unitedCloudFutureReturnObject){
-        		unitedCloudFutureReturnObject.set(messageResponse);
+        	RecycleFuture<MessageResponse> recycleFuture=getFutureFromMap(msgId);
+        	if(null!=recycleFuture){
+				recycleFuture.set(messageResponse);
         	}else {
         		log.error("从futureMap中获取的future为null，出错，请检查！！！");
 			}
@@ -66,22 +66,21 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
     }
     
     private RecycleFuture<MessageResponse> getFutureFromMap(final String msgId){
-    	RecycleFuture<MessageResponse> unitedCloudFutureReturnObject=null;
+    	RecycleFuture<MessageResponse> recycleFuture=null;
     	try{
-    		unitedCloudFutureReturnObject=messageFutureMap.get(msgId);
+			recycleFuture=messageFutureMap.get(msgId);
     	}catch (Throwable throwable) {
-    		unitedCloudFutureReturnObject=null;
+			recycleFuture=null;
 			throwable.printStackTrace();
 			log.error("从futureMap中获取future时key为null，出错，请检查！！！可能因为服务端回复超时，map中的future已经被移除了。");
 		}
-    	return unitedCloudFutureReturnObject;
+    	return recycleFuture;
     }
-    
-    
+
     private boolean checkLength(final byte[] bytes){
     	boolean isZero=false;
     	if(bytes.length==0){
-    		log.error("被检查的数组长度为零，请检查……！！！");
+    		log.error("bytes.length is zero, please check");
     		isZero=true;
     	}else {
 			isZero=false;
@@ -99,9 +98,7 @@ public class NettyMessageSendHandler extends SimpleChannelInboundHandler<byte[]>
 		}
     	return isNull;
     }
-    
-    
-    
+
     @Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 		ctx.channel().close();

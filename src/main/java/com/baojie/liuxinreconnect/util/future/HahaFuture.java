@@ -23,7 +23,7 @@ public class HahaFuture {
 		this.state = New;
 	}
 
-	public static HahaFuture createFutureToBuild(final Long id) {
+	public static HahaFuture create(final Long id) {
 		HahaFuture futureToBuild = new HahaFuture(id);
 		return futureToBuild;
 	}

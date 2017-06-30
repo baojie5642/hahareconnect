@@ -10,37 +10,25 @@ public class YieldTest {
     public static class TestThread extends Thread {
 
         @Override
-        public void run()
-        {
-            while (!stop)
-            {
+        public void run() {
+            while (!stop) {
                 //Thread.yield();
             }
         }
     }
 
-    public void setStop()
-    {
+    public void setStop() {
         stop = true;
     }
 
 
-    public static void main(String args[])
-    {
+    public static void main(String args[]) {
         final YieldTest yieldTest = new YieldTest();
-
         final YieldTest.TestThread testThread = new TestThread();
-
         testThread.start();
-
-
         LockSupport.parkNanos(TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS));
-
         yieldTest.setStop();
-
         System.out.println("has stop");
-
     }
-
 
 }

@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.baojie.liuxinreconnect.client.buildhouse.ChannelBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.netty.channel.Channel;
@@ -20,7 +21,7 @@ public final class HaChannelGroup {
     //channel标号从1开始,因为表示个数，所以从一开始
     private final AtomicInteger channelNum = new AtomicInteger(1);
     private final Map<Integer, Channel> channels;
-    private volatile int num=Init;
+    private volatile int num = Init;
 
     private HaChannelGroup() {
         this.channels = new ConcurrentHashMap<>(Init);
@@ -49,10 +50,10 @@ public final class HaChannelGroup {
         return true;
     }
 
-    private void checkNum(){
-        final int size=channelNum.get()-1;
-        if(size>=num){
-            num=size;
+    private void checkNum() {
+        final int size = channelNum.get() - 1;
+        if (size >= num) {
+            num = size;
         }
     }
 
@@ -64,7 +65,7 @@ public final class HaChannelGroup {
         } else {
             channel = getChannel(channelId);
             if (null == channel) {
-                log.error("get channel from channelArrayList is null");
+                log.error("get channel from ConcurrentHashMap is null");
                 return channel;
             } else {
                 return channel;
@@ -93,13 +94,11 @@ public final class HaChannelGroup {
             final Iterator iterator = set.iterator();
             if (null != iterator) {
                 Map.Entry<Integer, Channel> entity = null;
-                Channel channel = null;
+                Channel channel;
                 while (iterator.hasNext()) {
                     entity = (Map.Entry<Integer, Channel>) iterator.next();
                     channel = entity.getValue();
-                    if (null != channel) {
-                        channel.close();
-                    }
+                    ChannelBuilder.releaseChannel(channel);
                 }
             }
         }
