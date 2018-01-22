@@ -5,6 +5,7 @@ logs/
 .classpath
 .project
 .settings/
+/.settings
 *.classpath
 *.settings/
 *.project
