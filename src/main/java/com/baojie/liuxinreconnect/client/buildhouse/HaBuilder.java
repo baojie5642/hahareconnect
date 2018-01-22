@@ -7,6 +7,7 @@ import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 
+
 public class HaBuilder {
 
     private HaBuilder() {
@@ -37,8 +38,8 @@ public class HaBuilder {
     public static EventLoopGroup buildEventLoopGroup(final int threadNum) {
         EventLoopGroup eventLoopGroup = null;
         if (Epoll.isAvailable()) {
-            eventLoopGroup = new EpollEventLoopGroup(threadNum,
-                    HaThreadFactory.create("haNettyClient", Thread.MAX_PRIORITY));
+            eventLoopGroup = new EpollEventLoopGroup(threadNum, HaThreadFactory.create("haNettyClient", Thread
+                    .MAX_PRIORITY));
         } else {
             eventLoopGroup = new NioEventLoopGroup(threadNum, HaThreadFactory.create("haNettyClient", Thread
                     .MAX_PRIORITY));
