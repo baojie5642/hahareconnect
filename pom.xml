@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.baojie</groupId>
     <artifactId>hahareconnect</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -11,15 +11,15 @@
         <slf4j.version>1.7.25</slf4j.version>
         <io.protostuff.version>1.6.0</io.protostuff.version>
         <org.objenesis.version>2.6</org.objenesis.version>
-        <io.netty.version>4.1.19.Final</io.netty.version>
-        <org.springframework.version>5.0.2.RELEASE</org.springframework.version>
+        <io.netty.version>4.1.29.Final</io.netty.version>
         <logback.version>1.2.3</logback.version>
+        <jsoniter.version>0.9.23</jsoniter.version>
     </properties>
     <dependencies>
         <dependency>
             <groupId>com.jsoniter</groupId>
             <artifactId>jsoniter</artifactId>
-            <version>0.9.20</version>
+            <version>${jsoniter.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -31,13 +31,11 @@
             <artifactId>netty-all</artifactId>
             <version>${io.netty.version}</version>
         </dependency>
-
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
         </dependency>
-        <!-- Protostuff -->
         <dependency>
             <groupId>io.protostuff</groupId>
             <artifactId>protostuff-core</artifactId>
@@ -58,13 +56,11 @@
             <artifactId>protostuff-collectionschema</artifactId>
             <version>${io.protostuff.version}</version>
         </dependency>
-        <!-- Objenesis -->
         <dependency>
             <groupId>org.objenesis</groupId>
             <artifactId>objenesis</artifactId>
             <version>${org.objenesis.version}</version>
         </dependency>
-
     </dependencies>
 
     <build>
@@ -72,7 +68,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.8.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
                     <source>1.8</source>

@@ -5,12 +5,12 @@ public class HostAndPort {
     private final String host;
     private final int port;
 
-    private HostAndPort(final String host, final int port) {
+    private HostAndPort(String host, int port) {
         this.host = host;
         this.port = port;
     }
 
-    public static HostAndPort create(final String host, final int port) {
+    public static HostAndPort create(String host, int port) {
         return new HostAndPort(host, port);
     }
 
